@@ -1,6 +1,13 @@
 import pybullet as p
 import pybullet_data
 import time
+import sys
+from pathlib import Path
+
+SRC_PATH = Path(__file__).resolve().parents[1] / 'src'
+sys.path.append(str(SRC_PATH))
+
+from simulation.environment_generator import generate_random_2d_environment
 
 
 def main():
@@ -13,6 +20,9 @@ def main():
     start_pos = [0, 0, 0.1]
     start_orientation = p.getQuaternionFromEuler([0, 0, 0])
     robot_id = p.loadURDF('r2d2.urdf', start_pos, start_orientation)
+
+    # Generate random obstacles
+    generate_random_2d_environment(num_obstacles=15, area_size=6.0)
 
     # Simple simulation loop
     for _ in range(1000):
