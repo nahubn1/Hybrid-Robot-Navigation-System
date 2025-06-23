@@ -6,30 +6,30 @@ import pybullet as p
 
 
 @dataclass
-class DifferentialDriveRobot:
-    """Simple differential drive kinematics wrapper for a PyBullet robot."""
+class HolonomicRobot:
+    """Simple holonomic kinematics wrapper for a PyBullet robot."""
 
     robot_id: int
-    wheel_radius: float
-    wheel_base: float
-    left_speed: float = 0.0
-    right_speed: float = 0.0
+    vx: float = 0.0
+    vy: float = 0.0
+    yaw_rate: float = 0.0
 
-    def set_wheel_speeds(self, left: float, right: float) -> None:
-        self.left_speed = float(left)
-        self.right_speed = float(right)
+    def set_velocity(self, vx: float, vy: float, yaw_rate: float) -> None:
+        self.vx = float(vx)
+        self.vy = float(vy)
+        self.yaw_rate = float(yaw_rate)
 
     def step(self, dt: float) -> None:
         pos, orn = p.getBasePositionAndOrientation(self.robot_id)
         yaw = p.getEulerFromQuaternion(orn)[2]
-        v = 0.5 * self.wheel_radius * (self.left_speed + self.right_speed)
-        omega = self.wheel_radius * (self.right_speed - self.left_speed) / self.wheel_base
+        dx = (self.vx * math.cos(yaw) - self.vy * math.sin(yaw)) * dt
+        dy = (self.vx * math.sin(yaw) + self.vy * math.cos(yaw)) * dt
         new_pos = [
-            pos[0] + v * math.cos(yaw) * dt,
-            pos[1] + v * math.sin(yaw) * dt,
+            pos[0] + dx,
+            pos[1] + dy,
             pos[2],
         ]
-        new_yaw = yaw + omega * dt
+        new_yaw = yaw + self.yaw_rate * dt
         p.resetBasePositionAndOrientation(
             self.robot_id, new_pos, p.getQuaternionFromEuler([0.0, 0.0, new_yaw])
         )
