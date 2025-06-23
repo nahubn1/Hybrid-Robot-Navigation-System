@@ -8,7 +8,7 @@ SRC_PATH = Path(__file__).resolve().parents[1] / 'src'
 sys.path.append(str(SRC_PATH))
 
 from simulation.environment_generator import generate_random_2d_environment
-from simulation.robot import DifferentialDriveRobot, LidarSensor
+from simulation.robot import HolonomicRobot, LidarSensor
 
 
 def main():
@@ -22,7 +22,7 @@ def main():
     start_orientation = p.getQuaternionFromEuler([0, 0, 0])
     robot_id = p.loadURDF('r2d2.urdf', start_pos, start_orientation)
 
-    robot = DifferentialDriveRobot(robot_id, wheel_radius=0.0475, wheel_base=0.3)
+    robot = HolonomicRobot(robot_id)
     lidar = LidarSensor(robot_id, range=5.0, num_rays=36)
 
     # Generate random obstacles
@@ -30,7 +30,7 @@ def main():
 
     # Simple simulation loop
     for _ in range(1000):
-        robot.set_wheel_speeds(5.0, 5.0)
+        robot.set_velocity(5.0, 0.0, 0.0)
         robot.step(1.0 / 240.0)
         lidar.scan()
         time.sleep(1.0 / 240.0)
