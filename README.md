@@ -7,8 +7,8 @@ This project uses [PyBullet](https://pybullet.org/) for a lightweight simulation
 environment. To run the demo simulation:
 
 ```bash
-# Install Python dependencies
-pip install -r environment/requirements.txt
+# Install dependencies
+bash environment/setup.sh
 
 # Launch the example simulator
 python scripts/simulation/run_simulation.py
@@ -34,3 +34,13 @@ grid.set_cell(5, 5, 1)
 prob_map = grid.to_probability_map()
 print(prob_map.get_cell(5, 5))  # 1.0
 ```
+
+
+## Dataset Generation
+
+A script is provided to automatically generate synthetic occupancy grids for training. It builds random scenes in PyBullet and performs batched ray casting to save `.npy` grids with metadata.
+
+```bash
+python scripts/data_generation/generate_pybullet_envs.py --output-dir data/raw --num-scenes 50 --archetype clutter --resolution 128
+```
+
