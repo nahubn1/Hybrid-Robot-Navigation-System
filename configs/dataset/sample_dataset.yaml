@@ -1,0 +1,25 @@
+seed: 42
+raw_dir: data/raw
+processed_dir: data/processed
+envs_per_archetype:
+  clutter: 5
+  room: 5
+  maze: 5
+resolution: 128
+area_size: 5.0
+obstacle_count: 20
+num_rooms: 2
+maze_size: 4
+passage_width: 1.0
+raycast_height: 5.0
+heatmap:
+  samples: 100
+  radius: 10.0
+  top_k: 10
+  sigma: 2.0
+  method: betweenness
+split:
+  train: 0.8
+  val: 0.1
+  test: 0.1
+manifest: true
