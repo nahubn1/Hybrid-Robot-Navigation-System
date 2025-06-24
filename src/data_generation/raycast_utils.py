@@ -17,6 +17,11 @@ def generate_occupancy_grid(area_size: float = 5.0,
             ray_from.append([x, y, height])
             ray_to.append([x, y, -height])
     results = p.rayTestBatch(ray_from, ray_to)
+    if len(results) < len(ray_from):
+        missing_from = ray_from[len(results):]
+        missing_to = ray_to[len(results):]
+        if missing_from:
+            results += p.rayTestBatch(missing_from, missing_to)
     occ = np.zeros((resolution, resolution), dtype=np.uint8)
     idx = 0
     for i in range(resolution):
