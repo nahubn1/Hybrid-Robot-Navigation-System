@@ -77,18 +77,51 @@ def apply_walls(grid: np.ndarray, walls: List[Wall], wall_thickness: int, door_c
     for wall in walls:
         door_min, door_max = door_cfg.get("width_range", [3, 5])
         door_width = rng.randint(door_min, door_max)
+
         if wall.orientation == 'v':
             y0, y1 = wall.start, wall.end
             x = wall.pos
             grid[y0:y1, max(0, x - half):min(grid.shape[1], x + half + 1)] = 1
-            door_y = rng.randint(y0 + half + 1, max(y0 + half + 1, y1 - half - door_width))
-            grid[door_y:door_y + door_width, max(0, x - half):min(grid.shape[1], x + half + 1)] = 0
+
+            low = y0 + half + 1
+            high = max(low, y1 - half - door_width)
+            if high <= low:
+                continue
+
+            for _ in range(10):
+                door_y = rng.randint(low, high)
+                conflict = False
+                for other in walls:
+                    if other.orientation == 'h' and other.start <= x < other.end:
+                        if other.pos >= door_y - half and other.pos < door_y + door_width + half:
+                            conflict = True
+                            break
+                if conflict:
+                    continue
+                grid[door_y:door_y + door_width, max(0, x - half):min(grid.shape[1], x + half + 1)] = 0
+                break
         else:
             x0, x1 = wall.start, wall.end
             y = wall.pos
             grid[max(0, y - half):min(grid.shape[0], y + half + 1), x0:x1] = 1
-            door_x = rng.randint(x0 + half + 1, max(x0 + half + 1, x1 - half - door_width))
-            grid[max(0, y - half):min(grid.shape[0], y + half + 1), door_x:door_x + door_width] = 0
+
+            low = x0 + half + 1
+            high = max(low, x1 - half - door_width)
+            if high <= low:
+                continue
+
+            for _ in range(10):
+                door_x = rng.randint(low, high)
+                conflict = False
+                for other in walls:
+                    if other.orientation == 'v' and other.start <= y < other.end:
+                        if other.pos >= door_x - half and other.pos < door_x + door_width + half:
+                            conflict = True
+                            break
+                if conflict:
+                    continue
+                grid[max(0, y - half):min(grid.shape[0], y + half + 1), door_x:door_x + door_width] = 0
+                break
 
 
 def draw_square(grid, x, y, size):
