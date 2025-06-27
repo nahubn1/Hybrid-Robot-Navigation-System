@@ -79,7 +79,20 @@ def main() -> None:
         with open(meta_path, 'w') as f:
             json.dump(meta, f, indent=2)
 
-    p.disconnect()
+    # Only disconnect immediately in DIRECT mode
+    if args.mode.upper() == 'DIRECT':
+        p.disconnect()
+    elif args.mode.upper() == 'GUI':
+        print("\n[INFO] PyBullet GUI is open. Press ESC in the PyBullet window to close it and exit the script.")
+        while True:
+            keys = p.getKeyboardEvents()
+            # 27 is the ASCII code for ESC
+            if 27 in keys and keys[27] & p.KEY_WAS_TRIGGERED:
+                print("[INFO] ESC pressed. Closing PyBullet GUI.")
+                break
+            import time
+            time.sleep(0.1)
+        p.disconnect()
 
 
 if __name__ == '__main__':

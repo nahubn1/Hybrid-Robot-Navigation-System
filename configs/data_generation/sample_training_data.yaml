@@ -6,16 +6,30 @@ map_resolution: 200
 shell_thickness: 2
 bsp:
   min_leaf_size: 30
-  split_range: [0.4, 0.6]
+  split_range: [0.3, 0.7]
   wall_thickness: 2
 doors:
-  width_range: [3, 5]
+  width_range: [8, 12]
 obstacles:
   count_range_per_room: [1, 3]
   door_clearance: 2
+  obstacle_clearance: 2  
   shape_definitions:
-    - size_range: [2, 6]
-      weight: 1.0
+    - type: rectangle
+      size_range: [2, 6]
+      weight: 0.2
+    - type: triangle
+      size_range: [2, 6]
+      weight: 0.2
+    - type: u-shape
+      size_range: [2, 6]
+      weight: 0.15
+    - type: l-shape
+      size_range: [2, 6]
+      weight: 0.15
+    - type: t-shape
+      size_range: [2, 6]
+      weight: 0.1
 robots:
   - clearance: 0.2
     step_size: 1.0

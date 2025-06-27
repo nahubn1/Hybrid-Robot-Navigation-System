@@ -1,0 +1,6 @@
+# Ignore generated data
+data/raw/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc

@@ -91,23 +91,123 @@ def apply_walls(grid: np.ndarray, walls: List[Wall], wall_thickness: int, door_c
             grid[max(0, y - half):min(grid.shape[0], y + half + 1), door_x:door_x + door_width] = 0
 
 
+def draw_square(grid, x, y, size):
+    grid[y:y + size, x:x + size] = 1
+
+
+def draw_pyramid(grid, x, y, size):
+    # Draw a right triangle (pyramid base) with right angle at (x, y)
+    for i in range(size):
+        grid[y + i, x:x + i + 1] = 1
+
+
+def draw_cylinder(grid, x, y, size):
+    # Draw a filled circle (cylinder base) centered in the square
+    cy = y + size // 2
+    cx = x + size // 2
+    r = size // 2
+    for iy in range(y, y + size):
+        for ix in range(x, x + size):
+            if (ix - cx) ** 2 + (iy - cy) ** 2 <= r ** 2:
+                grid[iy, ix] = 1
+
+
+def draw_rectangle(grid, x, y, size):
+    grid[y:y + size, x:x + size * 2] = 2
+
+
+def draw_triangle(grid, x, y, size):
+    for i in range(size):
+        grid[y + i, x:x + i + 1] = 3
+
+
+def draw_circle(grid, x, y, size):
+    cy = y + size // 2
+    cx = x + size // 2
+    r = size // 2
+    for iy in range(y, y + size):
+        for ix in range(x, x + size):
+            if (ix - cx) ** 2 + (iy - cy) ** 2 <= r ** 2:
+                grid[iy, ix] = 4
+
+
+def draw_u_shape(grid, x, y, size):
+    # U-shape: three sides of a square
+    grid[y:y + size, x] = 5
+    grid[y:y + size, x + size - 1] = 5
+    grid[y + size - 1, x:x + size] = 5
+
+
+def draw_l_shape(grid, x, y, size):
+    # L-shape: two sides of a square
+    grid[y:y + size, x] = 6
+    grid[y + size - 1, x:x + size] = 6
+
+
+def draw_t_shape(grid, x, y, size):
+    # T-shape: vertical and horizontal bar
+    grid[y:y + size, x + size // 2] = 7
+    grid[y + size // 2, x:x + size] = 7
+
+
 def place_obstacles(grid: np.ndarray, rooms: List[Leaf], cfg: Dict, wall_thickness: int, rng: random.Random) -> None:
     count_min, count_max = cfg.get("count_range_per_room", [0, 0])
     door_clearance = int(cfg.get("door_clearance", 1))
-    shape_defs = cfg.get("shape_definitions", [{"size_range": [2, 4], "weight": 1.0}])
+    obstacle_clearance = int(cfg.get("obstacle_clearance", 2))
+    shape_defs = cfg.get("shape_definitions", [
+        {"type": "rectangle", "size_range": [2, 4], "weight": 1.0},
+        {"type": "triangle", "size_range": [2, 4], "weight": 1.0},
+        {"type": "u-shape", "size_range": [2, 4], "weight": 1.0},
+        {"type": "l-shape", "size_range": [2, 4], "weight": 1.0},
+        {"type": "t-shape", "size_range": [2, 4], "weight": 1.0},
+    ])
     weights = [sd.get("weight", 1.0) for sd in shape_defs]
     for room in rooms:
         num = rng.randint(count_min, count_max + 1)
+        placed = []
         for _ in range(num):
             shape_def = rng.choices(shape_defs, weights)[0]
             size_min, size_max = shape_def.get("size_range", [2, 4])
             size = rng.randint(size_min, size_max)
-            for _ in range(10):
-                x = rng.randint(room.x + wall_thickness, room.x + room.w - size - wall_thickness)
-                y = rng.randint(room.y + wall_thickness, room.y + room.h - size - wall_thickness)
+            shape_type = shape_def.get("type", "rectangle")
+            x_min = room.x + wall_thickness
+            x_max = room.x + room.w - size - wall_thickness
+            y_min = room.y + wall_thickness
+            y_max = room.y + room.h - size - wall_thickness
+            if x_min > x_max or y_min > y_max:
+                continue
+            for _ in range(20):
+                x = rng.randint(x_min, x_max)
+                y = rng.randint(y_min, y_max)
                 patch = grid[y - door_clearance:y + size + door_clearance, x - door_clearance:x + size + door_clearance]
-                if np.all(patch == 0):
-                    grid[y:y + size, x:x + size] = 1
+                # Check for wall collision (walls are 1)
+                if np.any(patch == 1):
+                    continue
+                # Check for obstacle collision (obstacles are 2-7)
+                if np.any(patch >= 2):
+                    continue
+                # Check for clearance with other obstacles
+                for ox, oy, osize in placed:
+                    if abs(x - ox) < osize + size + obstacle_clearance and abs(y - oy) < osize + size + obstacle_clearance:
+                        break
+                else:
+                    # Final check: ensure the obstacle's area does not overlap any wall
+                    obstacle_area = grid[y:y + size, x:x + size]
+                    if np.any(obstacle_area == 1):
+                        continue
+                    if shape_type == "rectangle":
+                        draw_rectangle(grid, x, y, size)
+                    elif shape_type == "triangle":
+                        draw_triangle(grid, x, y, size)
+                    elif shape_type == "u-shape":
+                        draw_u_shape(grid, x, y, size)
+                    elif shape_type == "l-shape":
+                        draw_l_shape(grid, x, y, size)
+                    elif shape_type == "t-shape":
+                        draw_t_shape(grid, x, y, size)
+                    else:
+                        draw_rectangle(grid, x, y, size)
+                    placed.append((x, y, size))
                     break
 
 

@@ -67,8 +67,8 @@ def main() -> None:
                 gy, gx = choose_free_cell(sample, rng)
                 while (gy, gx) == (sy, sx):
                     gy, gx = choose_free_cell(sample, rng)
-                sample[sy, sx] = 2
-                sample[gy, gx] = 3
+                sample[sy, sx] = 8  # Use 8 for start
+                sample[gy, gx] = 9  # Use 9 for goal
                 name = f'map{map_idx:04d}_s{sample_idx:02d}_r{robot_idx:02d}.npz'
                 out_path = out_dir / name
                 np.savez_compressed(
