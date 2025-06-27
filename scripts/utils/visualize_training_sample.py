@@ -105,6 +105,11 @@ def main() -> None:
         sample_file = select_sample_with_dialog(args.dir)
 
     p.connect(p.GUI)
+    # Hide the default axis/GUI overlay for a cleaner view
+    try:
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+    except Exception:
+        pass
     load_and_render(sample_file)
     print("Press 'S' to select a new environment, or close the window to exit.")
     pulse_angle = 0
