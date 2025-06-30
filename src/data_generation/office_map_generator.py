@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import random
 import numpy as np
+
 
 
 @dataclass
@@ -16,6 +17,20 @@ class Leaf:
     y: int
     w: int
     h: int
+    id: Optional[int] = None
+
+
+@dataclass
+class Node:
+    """BSP tree node for hierarchical layout."""
+
+    x: int
+    y: int
+    w: int
+    h: int
+    left: Optional['Node'] = None
+    right: Optional['Node'] = None
+    leaf: Optional[Leaf] = None
 
 
 @dataclass
@@ -26,102 +41,75 @@ class Wall:
     end: int
 
 
-def bsp_partition(width: int, height: int, cfg: Dict, rng: random.Random) -> Tuple[List[Leaf], List[Wall]]:
-    """Generate a BSP layout returning rooms and dividing walls."""
+def bsp_partition(width: int, height: int, cfg: Dict, rng: random.Random) -> Tuple[List[Leaf], List[Wall], Node]:
+    """Generate a BSP layout returning rooms, dividing walls and BSP tree."""
     min_leaf = int(cfg.get("min_leaf_size", 20))
     split_low, split_high = cfg.get("split_range", [0.4, 0.6])
 
-    leaves: List[Leaf] = [Leaf(0, 0, width, height)]
+    root = Node(0, 0, width, height)
+    queue = [root]
+    leaves: List[Leaf] = []
     walls: List[Wall] = []
-    queue = [0]
+
     while queue:
-        idx = queue.pop()
-        leaf = leaves[idx]
-        if leaf.w < 2 * min_leaf and leaf.h < 2 * min_leaf:
+        node = queue.pop()
+        if node.w < 2 * min_leaf and node.h < 2 * min_leaf:
+            leaf = Leaf(node.x, node.y, node.w, node.h)
+            node.leaf = leaf
+            leaves.append(leaf)
             continue
-        split_vert = leaf.w > leaf.h
-        if leaf.w >= 2 * min_leaf and leaf.h >= 2 * min_leaf:
+
+        split_vert = node.w > node.h
+        if node.w >= 2 * min_leaf and node.h >= 2 * min_leaf:
             split_vert = rng.random() < 0.5
+
         if split_vert:
-            min_split = int(leaf.w * split_low)
-            max_split = int(leaf.w * split_high)
+            min_split = int(node.w * split_low)
+            max_split = int(node.w * split_high)
             if max_split - min_split < min_leaf:
+                leaf = Leaf(node.x, node.y, node.w, node.h)
+                node.leaf = leaf
+                leaves.append(leaf)
                 continue
             split = rng.randint(min_split, max_split)
-            left = Leaf(leaf.x, leaf.y, split, leaf.h)
-            right = Leaf(leaf.x + split, leaf.y, leaf.w - split, leaf.h)
-            leaves[idx] = left
-            leaves.append(right)
-            queue.append(len(leaves) - 1)
-            queue.append(idx)
-            walls.append(Wall('v', leaf.x + split, leaf.y, leaf.y + leaf.h))
+            node.left = Node(node.x, node.y, split, node.h)
+            node.right = Node(node.x + split, node.y, node.w - split, node.h)
+            queue.append(node.left)
+            queue.append(node.right)
+            walls.append(Wall('v', node.x + split, node.y, node.y + node.h))
         else:
-            min_split = int(leaf.h * split_low)
-            max_split = int(leaf.h * split_high)
+            min_split = int(node.h * split_low)
+            max_split = int(node.h * split_high)
             if max_split - min_split < min_leaf:
+                leaf = Leaf(node.x, node.y, node.w, node.h)
+                node.leaf = leaf
+                leaves.append(leaf)
                 continue
             split = rng.randint(min_split, max_split)
-            top = Leaf(leaf.x, leaf.y, leaf.w, split)
-            bottom = Leaf(leaf.x, leaf.y + split, leaf.w, leaf.h - split)
-            leaves[idx] = top
-            leaves.append(bottom)
-            queue.append(len(leaves) - 1)
-            queue.append(idx)
-            walls.append(Wall('h', leaf.y + split, leaf.x, leaf.x + leaf.w))
-    return leaves, walls
+            node.left = Node(node.x, node.y, node.w, split)
+            node.right = Node(node.x, node.y + split, node.w, node.h - split)
+            queue.append(node.left)
+            queue.append(node.right)
+            walls.append(Wall('h', node.y + split, node.x, node.x + node.w))
+
+    for idx, leaf in enumerate(leaves):
+        leaf.id = idx
+
+    return leaves, walls, root
 
 
-def apply_walls(grid: np.ndarray, walls: List[Wall], wall_thickness: int, door_cfg: Dict, rng: random.Random) -> None:
-    """Draw walls and doorways onto the grid."""
+def draw_walls(grid: np.ndarray, walls: List[Wall], wall_thickness: int) -> None:
+    """Draw solid walls onto the grid."""
     half = wall_thickness // 2
     for wall in walls:
-        door_min, door_max = door_cfg.get("width_range", [3, 5])
-        door_width = rng.randint(door_min, door_max)
-
         if wall.orientation == 'v':
             y0, y1 = wall.start, wall.end
             x = wall.pos
             grid[y0:y1, max(0, x - half):min(grid.shape[1], x + half + 1)] = 1
-
-            low = y0 + half + 1
-            high = max(low, y1 - half - door_width)
-            if high <= low:
-                continue
-
-            for _ in range(10):
-                door_y = rng.randint(low, high)
-                conflict = False
-                for other in walls:
-                    if other.orientation == 'h' and other.start <= x < other.end:
-                        if other.pos >= door_y - half and other.pos < door_y + door_width + half:
-                            conflict = True
-                            break
-                if conflict:
-                    continue
-                grid[door_y:door_y + door_width, max(0, x - half):min(grid.shape[1], x + half + 1)] = 0
-                break
         else:
             x0, x1 = wall.start, wall.end
             y = wall.pos
             grid[max(0, y - half):min(grid.shape[0], y + half + 1), x0:x1] = 1
-
-            low = x0 + half + 1
-            high = max(low, x1 - half - door_width)
-            if high <= low:
-                continue
-
-            for _ in range(10):
-                door_x = rng.randint(low, high)
-                conflict = False
-                for other in walls:
-                    if other.orientation == 'v' and other.start <= y < other.end:
-                        if other.pos >= door_x - half and other.pos < door_x + door_width + half:
-                            conflict = True
-                            break
-                if conflict:
-                    continue
-                grid[max(0, y - half):min(grid.shape[0], y + half + 1), door_x:door_x + door_width] = 0
-                break
 
 
 def draw_square(grid, x, y, size):
@@ -275,11 +263,43 @@ def generate_office_map(cfg: Dict, rng: random.Random) -> np.ndarray:
     grid[:, :shell] = 1
     grid[:, -shell:] = 1
 
-    rooms, walls = bsp_partition(resolution - 2 * shell, resolution - 2 * shell, cfg.get("bsp", {}), rng)
-    shifted_rooms = [Leaf(r.x + shell, r.y + shell, r.w, r.h) for r in rooms]
-    shifted_walls = [Wall(w.orientation, w.pos + shell if w.orientation == 'v' else w.pos + shell, w.start + shell, w.end + shell) for w in walls]
+    rooms, walls, _ = bsp_partition(
+        resolution - 2 * shell,
+        resolution - 2 * shell,
+        cfg.get("bsp", {}),
+        rng,
+    )
+    shifted_rooms = [Leaf(r.x + shell, r.y + shell, r.w, r.h, id=r.id) for r in rooms]
+    shifted_walls = [
+        Wall(
+            w.orientation,
+            w.pos + shell,
+            w.start + shell,
+            w.end + shell,
+        )
+        for w in walls
+    ]
 
-    apply_walls(grid, shifted_walls, wall_thickness, cfg.get("doors", {}), rng)
+    from .connectivity_graph import build_room_adjacency_graph, place_doors_from_graph
+
+    draw_walls(grid, shifted_walls, wall_thickness)
+
+    door_cfg = cfg.get("doors", {})
+    graph = build_room_adjacency_graph(
+        shifted_rooms,
+        int(door_cfg.get("adjacency_min_length", 3)),
+    )
+    additional_prob = float(door_cfg.get("additional_door_probability", 0.0))
+    place_doors_from_graph(
+        grid,
+        graph,
+        shifted_walls,
+        wall_thickness,
+        door_cfg,
+        rng,
+        additional_prob,
+    )
+
     place_obstacles(grid, shifted_rooms, cfg.get("obstacles", {}), wall_thickness, rng)
 
     return grid

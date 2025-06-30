@@ -10,6 +10,7 @@ bsp:
   wall_thickness: 2
 doors:
   width_range: [8, 12]
+  additional_door_probability: 0.1
 obstacles:
   count_range_per_room: [1, 3]
   door_clearance: 2
