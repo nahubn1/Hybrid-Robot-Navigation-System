@@ -21,6 +21,7 @@ from data_generation.office_map_generator import (
     generate_office_map,
     flood_fill_connected,
 )
+from scipy import ndimage
 
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
@@ -31,10 +32,17 @@ def load_config(path: Path) -> Dict:
         return yaml.safe_load(f)
 
 
-def choose_free_cell(grid: np.ndarray, rng: random.Random) -> tuple[int, int]:
-    free = np.argwhere(grid == 0)
-    idx = rng.randint(0, len(free) - 1)
-    y, x = free[idx]
+def choose_free_cell(grid: np.ndarray, rng: random.Random, clearance: float = 0.0) -> tuple[int, int]:
+    free_mask = grid == 0
+    if clearance > 0:
+        distance = ndimage.distance_transform_edt(free_mask)
+        valid = np.argwhere(distance >= clearance)
+    else:
+        valid = np.argwhere(free_mask)
+    if len(valid) == 0:
+        raise ValueError("No valid free cell found with required clearance")
+    idx = rng.randint(0, len(valid) - 1)
+    y, x = valid[idx]
     return int(y), int(x)
 
 
@@ -63,10 +71,11 @@ def main() -> None:
         for sample_idx in range(samples_per_map):
             for robot_idx, robot in enumerate(robots):
                 sample = base.copy()
-                sy, sx = choose_free_cell(sample, rng)
-                gy, gx = choose_free_cell(sample, rng)
+                clearance = float(robot.get('clearance', 0.0))
+                sy, sx = choose_free_cell(sample, rng, clearance)
+                gy, gx = choose_free_cell(sample, rng, clearance)
                 while (gy, gx) == (sy, sx):
-                    gy, gx = choose_free_cell(sample, rng)
+                    gy, gx = choose_free_cell(sample, rng, clearance)
                 sample[sy, sx] = 8  # Use 8 for start
                 sample[gy, gx] = 9  # Use 9 for goal
                 name = f'map{map_idx:04d}_s{sample_idx:02d}_r{robot_idx:02d}.npz'
