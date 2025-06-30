@@ -32,7 +32,43 @@ obstacles:
       size_range: [2, 6]
       weight: 0.1
 robots:
-  - clearance: 0.2
-    step_size: 1.0
-  - clearance: 0.3
-    step_size: 1.5
+  - clearance: 3.13
+    step_size: 36.22
+  - clearance: 2.47
+    step_size: 28.91
+  - clearance: 1.32
+    step_size: 22.18
+  - clearance: 3.76
+    step_size: 39.44
+  - clearance: 2.01
+    step_size: 23.57
+  - clearance: 3.89
+    step_size: 32.08
+  - clearance: 1.77
+    step_size: 38.12
+  - clearance: 3.21
+    step_size: 27.65
+  - clearance: 2.68
+    step_size: 21.34
+  - clearance: 1.58
+    step_size: 34.77
+  - clearance: 3.55
+    step_size: 25.63
+  - clearance: 3.98
+    step_size: 29.87
+  - clearance: 2.23
+    step_size: 40.00
+  - clearance: 1.12
+    step_size: 20.45
+  - clearance: 3.44
+    step_size: 24.12
+  - clearance: 3.71
+    step_size: 37.01
+  - clearance: 1.95
+    step_size: 31.56
+  - clearance: 2.89
+    step_size: 26.78
+  - clearance: 3.67
+    step_size: 35.29
+  - clearance: 1.25
+    step_size: 22.99
