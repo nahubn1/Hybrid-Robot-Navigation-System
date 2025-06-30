@@ -2,4 +2,6 @@ pybullet
 numpy
 pyyaml
 networkx
-pytes
+pytest
+matplotlib
+pillow
