@@ -9,12 +9,12 @@ bsp:
   split_range: [0.3, 0.7]
   wall_thickness: 2
 doors:
-  width_range: [8, 12]
+  width_range: [10, 15]
   additional_door_probability: 0.1
 obstacles:
   count_range_per_room: [1, 3]
-  door_clearance: 2
-  obstacle_clearance: 2  
+  door_clearance: 6
+  obstacle_clearance: 6  
   shape_definitions:
     - type: rectangle
       size_range: [2, 6]
