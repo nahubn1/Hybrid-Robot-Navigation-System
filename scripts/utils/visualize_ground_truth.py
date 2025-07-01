@@ -7,11 +7,16 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import filedialog
+
+# Use a key that doesn't conflict with matplotlib's shortcuts, e.g., 'N' for next
+SWITCH_KEY = 'n'
 
 
-def compose_visualization(sample_path: Path, show_indices: bool = False) -> plt.Figure:
+def compose_visualization(sample_path: Path, gt_dir: Path, show_indices: bool = False) -> plt.Figure:
     """Return a matplotlib figure visualizing a ground truth sample."""
-    base = sample_path.with_suffix("")
+    base = gt_dir / sample_path.with_suffix("").name
 
     # Load base sample and ground truth arrays
     sample = np.load(sample_path, allow_pickle=True)
@@ -67,17 +72,31 @@ def compose_visualization(sample_path: Path, show_indices: bool = False) -> plt.
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Visualize a ground truth sample")
-    parser.add_argument("--sample_path", type=Path, required=True,
-                        help="Path to the .npz sample file")
+    parser = argparse.ArgumentParser(description="Visualize ground truth samples")
+    parser.add_argument("--ground_truth_dir", type=Path, required=True,
+                        help="Directory containing ground truth .npy files")
     parser.add_argument("--show-indices", action="store_true",
                         help="Overlay step numbers on the path")
     args = parser.parse_args()
 
-    fig = compose_visualization(args.sample_path, args.show_indices)
-    out_file = args.sample_path.with_name(f"visualization_{args.sample_path.stem}.png")
-    fig.savefig(out_file, dpi=150)
-    print(f"Saved visualization to {out_file}")
+    root = tk.Tk()
+    root.withdraw()
+    while True:
+        sample_path = filedialog.askopenfilename(title="Select .npz sample file", filetypes=[("NPZ files", "*.npz")])
+        if not sample_path:
+            break
+        fig = compose_visualization(Path(sample_path), args.ground_truth_dir, args.show_indices)
+        switch_file = {'next': False}
+
+        def on_key(event):
+            if event.key == SWITCH_KEY:
+                switch_file['next'] = True
+                plt.close(fig)
+
+        fig.canvas.mpl_connect('key_press_event', on_key)
+        plt.show()
+        if not switch_file['next']:
+            break
 
 
 if __name__ == "__main__":
