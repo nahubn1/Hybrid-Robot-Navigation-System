@@ -11,8 +11,10 @@ import pickle
 import sys
 import math
 from typing import Tuple
+import random
 import warnings
 from tqdm import tqdm
+import networkx as nx
 
 import numpy as np
 
@@ -22,7 +24,8 @@ class GroundTruthGenerationError(RuntimeError):
 
     pass
 
-SRC_PATH = Path(__file__).resolve().parents[2] / 'src'
+
+SRC_PATH = Path(__file__).resolve().parents[2] / "src"
 sys.path.append(str(SRC_PATH))
 
 from planning_algorithms.prm import build_prm
@@ -31,50 +34,53 @@ from utils.image_processing import distance_transform, dilate, gaussian_blur
 from utils.graph_helpers import filter_graph, snap_point
 
 
-CACHE_DIR = Path('.cache')
+CACHE_DIR = Path(".cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description='Generate ground truth data')
-    p.add_argument('--input-dir', type=str, required=True)
-    p.add_argument('--output-dir', type=str, required=True)
-    p.add_argument('--samples', type=int, default=500)
-    p.add_argument('--k-neighbors', type=int, default=10)
-    p.add_argument('--processes', type=int, default=1)
-    p.add_argument('--dilate-radius', type=int, default=2)
-    p.add_argument('--blur-sigma', type=float, default=1.0)
+    p = argparse.ArgumentParser(description="Generate ground truth data")
+    p.add_argument("--input-dir", type=str, required=True)
+    p.add_argument("--output-dir", type=str, required=True)
+    p.add_argument("--samples", type=int, default=500)
+    p.add_argument("--k-neighbors", type=int, default=10)
+    p.add_argument("--processes", type=int, default=1)
+    p.add_argument("--dilate-radius", type=int, default=2)
+    p.add_argument("--blur-sigma", type=float, default=1.0)
     return p.parse_args()
 
 
 def load_npz(file_path: Path):
     """Load a training sample from an ``npz`` file with validation."""
     if not file_path.exists():
-        raise GroundTruthGenerationError(
-            f"load_npz: file not found -> {file_path}")
+        raise GroundTruthGenerationError(f"load_npz: file not found -> {file_path}")
     try:
         data = np.load(file_path, allow_pickle=True)
     except Exception as exc:
         raise GroundTruthGenerationError(
-            f"load_npz: failed to read {file_path}: {exc}") from exc
+            f"load_npz: failed to read {file_path}: {exc}"
+        ) from exc
 
     required = {"map", "clearance", "step_size"}
     missing = required.difference(data.files)
     if missing:
         raise GroundTruthGenerationError(
-            f"load_npz: missing keys {missing} in {file_path}")
+            f"load_npz: missing keys {missing} in {file_path}"
+        )
 
     grid = data["map"]
     c = float(data["clearance"])
     s = float(data["step_size"])
-    return grid, c, s
+    cfg = data.get("config", None)
+    return grid, c, s, cfg
 
 
 def preprocess_map(map_id: str, grid: np.ndarray, num_samples: int, k: int):
     """Compute and cache distance transform and PRM for a map."""
     if grid.size == 0:
         raise GroundTruthGenerationError(
-            f"preprocess_map: empty grid for map_id={map_id}")
+            f"preprocess_map: empty grid for map_id={map_id}"
+        )
     dist_path = CACHE_DIR / f"{map_id}_dist.npy"
     prm_path = CACHE_DIR / f"{map_id}_prm.pkl"
     if dist_path.exists() and prm_path.exists():
@@ -84,21 +90,24 @@ def preprocess_map(map_id: str, grid: np.ndarray, num_samples: int, k: int):
                 prm = pickle.load(f)
         except Exception as exc:
             raise GroundTruthGenerationError(
-                f"preprocess_map: failed to load cache for {map_id}: {exc}") from exc
+                f"preprocess_map: failed to load cache for {map_id}: {exc}"
+            ) from exc
         return dist, prm
     try:
         dist = distance_transform((grid != 0).astype(np.uint8))
         prm = build_prm((grid != 0).astype(np.uint8), num_samples=num_samples, k=k)
     except Exception as exc:
         raise GroundTruthGenerationError(
-            f"preprocess_map: failed to build PRM for {map_id}: {exc}") from exc
+            f"preprocess_map: failed to build PRM for {map_id}: {exc}"
+        ) from exc
     try:
         np.save(dist_path, dist)
         with open(prm_path, "wb") as f:
             pickle.dump(prm, f)
     except Exception as exc:
         raise GroundTruthGenerationError(
-            f"preprocess_map: failed to write cache for {map_id}: {exc}") from exc
+            f"preprocess_map: failed to write cache for {map_id}: {exc}"
+        ) from exc
     return dist, prm
 
 
@@ -123,14 +132,58 @@ def densify_path(nodes: list[Tuple[int, int]], step: float) -> list[Tuple[int, i
     return result
 
 
-def process_file(file_path: Path, output_dir: Path, samples: int, k: int, dil_rad: int, blur_sigma: float):
-    grid, clearance, step = load_npz(file_path)
-    map_id = file_path.stem.split('_')[0]
+def _plan(graph: nx.Graph, start: Tuple[int, int], goal: Tuple[int, int]) -> list[int]:
+    """Attempt to plan a path on ``graph`` from ``start`` to ``goal``."""
+    try:
+        goal_node = snap_point(graph, goal)
+        planner = DStarLite(graph, goal_node)
+        start_node = snap_point(graph, start)
+        node_path = planner.replan(start_node)
+    except Exception:
+        return []
+    return node_path or []
+
+
+def reposition_start_goal(
+    grid: np.ndarray, graph: nx.Graph
+) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    """Choose two random nodes from the largest connected component and update the grid."""
+    components = list(nx.connected_components(graph))
+    if not components:
+        raise GroundTruthGenerationError(
+            "reposition_start_goal: graph has no components"
+        )
+    largest = max(components, key=len)
+    if len(largest) < 2:
+        raise GroundTruthGenerationError("reposition_start_goal: component too small")
+    s_node, g_node = random.sample(list(largest), 2)
+    sx, sy = graph.nodes[s_node]["pos"]
+    gx, gy = graph.nodes[g_node]["pos"]
+    grid[grid == 8] = 0
+    grid[grid == 9] = 0
+    if 0 <= sy < grid.shape[0] and 0 <= sx < grid.shape[1]:
+        grid[int(sy), int(sx)] = 8
+    if 0 <= gy < grid.shape[0] and 0 <= gx < grid.shape[1]:
+        grid[int(gy), int(gx)] = 9
+    return (int(sx), int(sy)), (int(gx), int(gy))
+
+
+def process_file(
+    file_path: Path,
+    output_dir: Path,
+    samples: int,
+    k: int,
+    dil_rad: int,
+    blur_sigma: float,
+):
+    grid, clearance, step, cfg = load_npz(file_path)
+    map_id = file_path.stem.split("_")[0]
     starts = np.argwhere(grid == 8)
     goals = np.argwhere(grid == 9)
     if starts.size == 0 or goals.size == 0:
         raise GroundTruthGenerationError(
-            f"process_file: start/goal missing in {file_path}")
+            f"process_file: start/goal missing in {file_path}"
+        )
     start = tuple(starts[0][::-1])
     goal = tuple(goals[0][::-1])
 
@@ -138,19 +191,33 @@ def process_file(file_path: Path, output_dir: Path, samples: int, k: int, dil_ra
     filtered = filter_graph(base_prm, dist, clearance, step)
     if filtered.number_of_nodes() == 0:
         raise GroundTruthGenerationError(
-            f"process_file: no nodes left after filtering for {file_path}")
-    try:
-        goal_node = snap_point(filtered, goal)
-        planner = DStarLite(filtered, goal_node)
-        start_node = snap_point(filtered, start)
-        node_path = planner.replan(start_node)
-    except Exception as exc:
-        raise GroundTruthGenerationError(
-            f"process_file: planning failed for {file_path}: {exc}") from exc
+            f"process_file: no nodes left after filtering for {file_path}"
+        )
+    node_path = _plan(filtered, start, goal)
     if not node_path:
-        raise GroundTruthGenerationError(
-            f"process_file: planner returned empty path for {file_path}")
-    coord_path = [filtered.nodes[n]['pos'] for n in node_path]
+        try:
+            start, goal = reposition_start_goal(grid, filtered)
+        except GroundTruthGenerationError:
+            raise
+        node_path = _plan(filtered, start, goal)
+        if not node_path:
+            raise GroundTruthGenerationError(
+                f"process_file: planner returned empty path for {file_path}"
+            )
+        # update the original npz with new start and goal
+        try:
+            np.savez_compressed(
+                file_path,
+                map=grid,
+                clearance=clearance,
+                step_size=step,
+                config=cfg,
+            )
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(
+                f"Failed to update input map {file_path}: {exc}", RuntimeWarning
+            )
+    coord_path = [filtered.nodes[n]["pos"] for n in node_path]
     dense_path = densify_path(coord_path, step)
     indices = np.zeros_like(grid, dtype=np.int32)
     mask = np.zeros_like(grid, dtype=np.uint8)
@@ -164,15 +231,23 @@ def process_file(file_path: Path, output_dir: Path, samples: int, k: int, dil_ra
         heat /= heat.max()
     out_base = output_dir / file_path.stem
     try:
-        np.save(out_base.with_suffix('.indices.npy'), indices)
-        np.save(out_base.with_suffix('.mask.npy'), mask)
-        np.save(out_base.with_suffix('.heat.npy'), heat)
+        np.save(out_base.with_suffix(".indices.npy"), indices)
+        np.save(out_base.with_suffix(".mask.npy"), mask)
+        np.save(out_base.with_suffix(".heat.npy"), heat)
     except Exception as exc:
         raise GroundTruthGenerationError(
-            f"process_file: failed to write outputs for {file_path}: {exc}") from exc
+            f"process_file: failed to write outputs for {file_path}: {exc}"
+        ) from exc
 
 
-def safe_process_file(file_path: Path, output_dir: Path, samples: int, k: int, dil_rad: int, blur_sigma: float) -> None:
+def safe_process_file(
+    file_path: Path,
+    output_dir: Path,
+    samples: int,
+    k: int,
+    dil_rad: int,
+    blur_sigma: float,
+) -> None:
     """Run ``process_file`` and issue a warning if it fails."""
     try:
         process_file(
@@ -193,10 +268,11 @@ def main() -> None:
     args = parse_args()
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    files = sorted(Path(args.input_dir).glob('*.npz'))
+    files = sorted(Path(args.input_dir).glob("*.npz"))
     if not files:
         raise GroundTruthGenerationError(
-            f"main: no .npz files found in {args.input_dir}")
+            f"main: no .npz files found in {args.input_dir}"
+        )
     worker = partial(
         safe_process_file,
         output_dir=out_dir,
@@ -218,5 +294,5 @@ def main() -> None:
             worker(f)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
