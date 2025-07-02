@@ -2,7 +2,8 @@ from pathlib import Path
 import sys
 
 import numpy as np
-import pybullet as p
+import pytest
+p = pytest.importorskip("pybullet")
 import pybullet_data
 
 SRC_PATH = Path(__file__).resolve().parents[2] / 'src'

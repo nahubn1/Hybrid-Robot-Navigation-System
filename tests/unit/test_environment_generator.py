@@ -1,4 +1,5 @@
-import pybullet as p
+import pytest
+p = pytest.importorskip("pybullet")
 from pathlib import Path
 import sys
 
