@@ -168,7 +168,7 @@ def process_file(file_path: Path, output_dir: Path, samples: int, k: int, dil_ra
     except Exception as exc:
         raise GroundTruthGenerationError(
             f"process_file: failed to write outputs for {file_path}: {exc}") from exc
-
+    return file_path
 
 def main() -> None:
     args = parse_args()
@@ -186,12 +186,14 @@ def main() -> None:
         dil_rad=args.dilate_radius,
         blur_sigma=args.blur_sigma,
     )
+    total = len(files)
     if args.processes > 1:
         with Pool(args.processes) as pool:
-            for _ in pool.imap_unordered(worker, files):
-                pass
+            for i, f in enumerate(pool.imap_unordered(worker, files), start=1):
+                print(f"[{i}/{total}] processed {Path(f).name}")
     else:
-        for f in files:
+        for i, f in enumerate(files, start=1):
+            print(f"[{i}/{total}] processing {f.name}")
             worker(f)
 
 
