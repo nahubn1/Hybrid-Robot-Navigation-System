@@ -17,6 +17,7 @@ from tqdm import tqdm
 import networkx as nx
 
 import numpy as np
+import yaml
 
 
 class GroundTruthGenerationError(RuntimeError):
@@ -38,15 +39,22 @@ CACHE_DIR = Path(".cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
 
+def load_config(path: Path) -> dict:
+    with open(path, 'r') as f:
+        return yaml.safe_load(f)
+
+
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Generate ground truth data")
-    p.add_argument("--input-dir", type=str, required=True)
-    p.add_argument("--output-dir", type=str, required=True)
-    p.add_argument("--samples", type=int, default=500)
-    p.add_argument("--k-neighbors", type=int, default=10)
-    p.add_argument("--processes", type=int, default=1)
-    p.add_argument("--dilate-radius", type=int, default=2)
-    p.add_argument("--blur-sigma", type=float, default=1.0)
+    p = argparse.ArgumentParser(description='Generate ground truth data')
+    p.add_argument('--config', type=str, help='YAML configuration file')
+    p.add_argument('--input-dir', type=str)
+    p.add_argument('--output-dir', type=str)
+    p.add_argument('--samples', type=int)
+    p.add_argument('--k-neighbors', type=int)
+    p.add_argument('--processes', type=int)
+    p.add_argument('--dilate-radius', type=int)
+    p.add_argument('--blur-sigma', type=float)
+    
     return p.parse_args()
 
 
@@ -275,14 +283,14 @@ def main() -> None:
         )
     worker = partial(
         safe_process_file,
-        output_dir=out_dir,
-        samples=args.samples,
-        k=args.k_neighbors,
-        dil_rad=args.dilate_radius,
-        blur_sigma=args.blur_sigma,
+        output_dir=output_dir,
+        samples=samples,
+        k=k_neigh,
+        dil_rad=dil_rad,
+        blur_sigma=blur_sigma,
     )
-    if args.processes > 1:
-        with Pool(args.processes) as pool:
+    if processes > 1:
+        with Pool(processes) as pool:
             for _ in tqdm(
                 pool.imap_unordered(worker, files),
                 total=len(files),

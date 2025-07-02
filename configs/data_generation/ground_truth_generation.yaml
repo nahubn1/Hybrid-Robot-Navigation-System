@@ -1,0 +1,7 @@
+input_dir: data/training_samples
+output_dir: data/ground_truth
+samples: 500
+k_neighbors: 10
+processes: 1
+dilate_radius: 2
+blur_sigma: 1.0
