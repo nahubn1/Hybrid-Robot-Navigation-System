@@ -21,9 +21,10 @@ def compose_visualization(sample_path: Path, gt_dir: Path, show_indices: bool = 
     # Load base sample and ground truth arrays
     sample = np.load(sample_path, allow_pickle=True)
     grid = sample["map"]
-    indices = np.load(base.with_suffix(".indices.npy"))
-    mask = np.load(base.with_suffix(".mask.npy"))
-    heat = np.load(base.with_suffix(".heat.npy"))
+    gt = np.load(base.with_suffix(".npz"))
+    indices = gt["indices"]
+    mask = gt["mask"]
+    heat = gt["heatmap"]
 
     # Determine start and goal coordinates (x, y)
     start_pos = np.argwhere(grid == 8)
