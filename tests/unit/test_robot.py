@@ -1,4 +1,5 @@
-import pybullet as p
+import pytest
+p = pytest.importorskip("pybullet")
 import pybullet_data
 
 from pathlib import Path

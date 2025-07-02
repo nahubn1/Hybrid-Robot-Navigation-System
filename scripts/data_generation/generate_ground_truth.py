@@ -11,6 +11,8 @@ import pickle
 import sys
 import math
 from typing import Tuple
+import warnings
+from tqdm import tqdm
 
 import numpy as np
 
@@ -170,6 +172,23 @@ def process_file(file_path: Path, output_dir: Path, samples: int, k: int, dil_ra
             f"process_file: failed to write outputs for {file_path}: {exc}") from exc
 
 
+def safe_process_file(file_path: Path, output_dir: Path, samples: int, k: int, dil_rad: int, blur_sigma: float) -> None:
+    """Run ``process_file`` and issue a warning if it fails."""
+    try:
+        process_file(
+            file_path=file_path,
+            output_dir=output_dir,
+            samples=samples,
+            k=k,
+            dil_rad=dil_rad,
+            blur_sigma=blur_sigma,
+        )
+    except GroundTruthGenerationError as exc:
+        warnings.warn(str(exc), RuntimeWarning)
+    except Exception as exc:  # noqa: BLE001
+        warnings.warn(f"Unexpected error processing {file_path}: {exc}", RuntimeWarning)
+
+
 def main() -> None:
     args = parse_args()
     out_dir = Path(args.output_dir)
@@ -179,7 +198,7 @@ def main() -> None:
         raise GroundTruthGenerationError(
             f"main: no .npz files found in {args.input_dir}")
     worker = partial(
-        process_file,
+        safe_process_file,
         output_dir=out_dir,
         samples=args.samples,
         k=args.k_neighbors,
@@ -188,10 +207,14 @@ def main() -> None:
     )
     if args.processes > 1:
         with Pool(args.processes) as pool:
-            for _ in pool.imap_unordered(worker, files):
+            for _ in tqdm(
+                pool.imap_unordered(worker, files),
+                total=len(files),
+                desc="Generating ground truth",
+            ):
                 pass
     else:
-        for f in files:
+        for f in tqdm(files, desc="Generating ground truth"):
             worker(f)
 
 
