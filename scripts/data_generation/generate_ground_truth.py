@@ -15,6 +15,7 @@ import warnings
 from tqdm import tqdm
 
 import numpy as np
+import yaml
 
 
 class GroundTruthGenerationError(RuntimeError):
@@ -35,15 +36,21 @@ CACHE_DIR = Path('.cache')
 CACHE_DIR.mkdir(exist_ok=True)
 
 
+def load_config(path: Path) -> dict:
+    with open(path, 'r') as f:
+        return yaml.safe_load(f)
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description='Generate ground truth data')
-    p.add_argument('--input-dir', type=str, required=True)
-    p.add_argument('--output-dir', type=str, required=True)
-    p.add_argument('--samples', type=int, default=500)
-    p.add_argument('--k-neighbors', type=int, default=10)
-    p.add_argument('--processes', type=int, default=1)
-    p.add_argument('--dilate-radius', type=int, default=2)
-    p.add_argument('--blur-sigma', type=float, default=1.0)
+    p.add_argument('--config', type=str, help='YAML configuration file')
+    p.add_argument('--input-dir', type=str)
+    p.add_argument('--output-dir', type=str)
+    p.add_argument('--samples', type=int)
+    p.add_argument('--k-neighbors', type=int)
+    p.add_argument('--processes', type=int)
+    p.add_argument('--dilate-radius', type=int)
+    p.add_argument('--blur-sigma', type=float)
     return p.parse_args()
 
 
@@ -191,22 +198,38 @@ def safe_process_file(file_path: Path, output_dir: Path, samples: int, k: int, d
 
 def main() -> None:
     args = parse_args()
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    files = sorted(Path(args.input_dir).glob('*.npz'))
+
+    cfg = {}
+    if args.config:
+        cfg = load_config(Path(args.config)) or {}
+
+    input_dir = Path(args.input_dir or cfg.get('input_dir', ''))
+    output_dir = Path(args.output_dir or cfg.get('output_dir', ''))
+
+    if not input_dir or not output_dir:
+        raise GroundTruthGenerationError('input and output directories must be specified')
+
+    samples = args.samples if args.samples is not None else int(cfg.get('samples', 500))
+    k_neigh = args.k_neighbors if args.k_neighbors is not None else int(cfg.get('k_neighbors', 10))
+    processes = args.processes if args.processes is not None else int(cfg.get('processes', 1))
+    dil_rad = args.dilate_radius if args.dilate_radius is not None else int(cfg.get('dilate_radius', 2))
+    blur_sigma = args.blur_sigma if args.blur_sigma is not None else float(cfg.get('blur_sigma', 1.0))
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    files = sorted(input_dir.glob('*.npz'))
     if not files:
         raise GroundTruthGenerationError(
-            f"main: no .npz files found in {args.input_dir}")
+            f"main: no .npz files found in {input_dir}")
     worker = partial(
         safe_process_file,
-        output_dir=out_dir,
-        samples=args.samples,
-        k=args.k_neighbors,
-        dil_rad=args.dilate_radius,
-        blur_sigma=args.blur_sigma,
+        output_dir=output_dir,
+        samples=samples,
+        k=k_neigh,
+        dil_rad=dil_rad,
+        blur_sigma=blur_sigma,
     )
-    if args.processes > 1:
-        with Pool(args.processes) as pool:
+    if processes > 1:
+        with Pool(processes) as pool:
             for _ in tqdm(
                 pool.imap_unordered(worker, files),
                 total=len(files),
