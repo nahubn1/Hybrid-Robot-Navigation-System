@@ -46,15 +46,17 @@ def load_config(path: Path) -> dict:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description='Generate ground truth data')
-    p.add_argument('--config', type=str, help='YAML configuration file')
-    p.add_argument('--input-dir', type=str)
-    p.add_argument('--output-dir', type=str)
-    p.add_argument('--samples', type=int)
-    p.add_argument('--k-neighbors', type=int)
-    p.add_argument('--processes', type=int)
-    p.add_argument('--dilate-radius', type=int)
-    p.add_argument('--blur-sigma', type=float)
-    
+    default_cfg = (
+        Path(__file__).resolve().parents[2]
+        / 'configs/data_generation/ground_truth_generation.yaml'
+    )
+    p.add_argument(
+        '--config',
+        type=str,
+        default=str(default_cfg),
+        help='YAML configuration file',
+    )
+
     return p.parse_args()
 
 
@@ -274,13 +276,24 @@ def safe_process_file(
 
 def main() -> None:
     args = parse_args()
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    files = sorted(Path(args.input_dir).glob("*.npz"))
+    cfg = load_config(Path(args.config))
+
+    try:
+        input_dir = Path(cfg['input_dir'])
+        output_dir = Path(cfg['output_dir'])
+        samples = int(cfg['samples'])
+        k_neigh = int(cfg['k_neighbors'])
+        processes = int(cfg['processes'])
+        dil_rad = int(cfg['dilate_radius'])
+        blur_sigma = float(cfg['blur_sigma'])
+    except KeyError as exc:
+        raise GroundTruthGenerationError(f'missing configuration key: {exc}') from exc
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    files = sorted(input_dir.glob('*.npz'))
     if not files:
         raise GroundTruthGenerationError(
-            f"main: no .npz files found in {args.input_dir}"
-        )
+            f"main: no .npz files found in {input_dir}")
     worker = partial(
         safe_process_file,
         output_dir=output_dir,
