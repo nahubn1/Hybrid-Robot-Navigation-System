@@ -261,9 +261,12 @@ def process_file(
         heat /= heat.max()
     out_base = output_dir / file_path.stem
     try:
-        np.save(out_base.with_suffix(".indices.npy"), indices)
-        np.save(out_base.with_suffix(".mask.npy"), mask)
-        np.save(out_base.with_suffix(".heat.npy"), heat)
+        np.savez_compressed(
+            out_base.with_suffix(".npz"),
+            indices=indices,
+            mask=mask,
+            heatmap=heat,
+        )
     except Exception as exc:
         raise GroundTruthGenerationError(
             f"process_file: failed to write outputs for {file_path}: {exc}"
