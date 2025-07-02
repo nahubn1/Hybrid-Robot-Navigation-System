@@ -44,8 +44,9 @@ class DStarLite:
         self.U = PriorityQueue()
         self.k_m = 0.0
         self.rhs[goal] = 0.0
-        self.U.push(goal, self.calculate_key(goal))
         self.start = goal
+        self.U.push(goal, self.calculate_key(goal))
+
 
     def calculate_key(self, node: int) -> Tuple[float, float]:
         g_rhs = min(self.g[node], self.rhs[node])
@@ -74,12 +75,12 @@ class DStarLite:
             u = self.U.pop()
             if self.g[u] > self.rhs[u]:
                 self.g[u] = self.rhs[u]
-                for s in self.graph.predecessors(u):
+                for s in self.graph.neighbors(u):
                     self.update_vertex(s)
             else:
                 self.g[u] = float('inf')
                 self.update_vertex(u)
-                for s in self.graph.predecessors(u):
+                for s in self.graph.neighbors(u):
                     self.update_vertex(s)
 
     def replan(self, start: int) -> List[int]:
