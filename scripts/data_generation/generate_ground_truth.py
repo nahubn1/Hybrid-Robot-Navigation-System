@@ -98,11 +98,12 @@ def preprocess_map(map_id: str, grid: np.ndarray, num_samples: int, k: int):
             dist = np.load(dist_path)
             with open(prm_path, "rb") as f:
                 prm = pickle.load(f)
-        except Exception as exc:
-            raise GroundTruthGenerationError(
-                f"preprocess_map: failed to load cache for {map_id}: {exc}"
-            ) from exc
-        return dist, prm
+            return dist, prm
+        except Exception:
+            # Corrupted cache files can occur if a previous run was interrupted
+            # while writing. Remove them and regenerate from scratch.
+            dist_path.unlink(missing_ok=True)
+            prm_path.unlink(missing_ok=True)
     try:
         dist = distance_transform((grid != 0).astype(np.uint8))
         prm = build_prm((grid != 0).astype(np.uint8), num_samples=num_samples, k=k)
