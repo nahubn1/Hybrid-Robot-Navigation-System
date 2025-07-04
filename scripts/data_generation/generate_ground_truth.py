@@ -143,6 +143,18 @@ def densify_path(nodes: list[Tuple[int, int]], step: float) -> list[Tuple[int, i
     return result
 
 
+def path_collision_free(grid: np.ndarray, path: list[Tuple[int, int]]) -> bool:
+    """Check that ``path`` does not intersect occupied cells in ``grid``."""
+    occ = (grid != 0).astype(np.uint8)
+    occ[grid == 8] = 0
+    occ[grid == 9] = 0
+    for (x1, y1), (x2, y2) in zip(path[:-1], path[1:]):
+        for x, y in bresenham_line(x1, y1, x2, y2):
+            if occ[int(y), int(x)]:
+                return False
+    return True
+
+
 def _plan(graph: nx.Graph, start: Tuple[int, int], goal: Tuple[int, int]) -> list[int]:
     """Attempt to plan a path on ``graph`` from ``start`` to ``goal``."""
     try:
@@ -230,6 +242,10 @@ def process_file(
             )
     coord_path = [filtered.nodes[n]["pos"] for n in node_path]
     dense_path = densify_path(coord_path, step)
+    if not path_collision_free(grid, dense_path):
+        raise GroundTruthGenerationError(
+            f"process_file: generated path intersects obstacles for {file_path}"
+        )
     indices = np.zeros_like(grid, dtype=np.int32)
     mask = np.zeros_like(grid, dtype=np.uint8)
     for idx, (x, y) in enumerate(dense_path, start=1):
