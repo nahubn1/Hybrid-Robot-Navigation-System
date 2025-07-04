@@ -32,7 +32,7 @@ sys.path.append(str(SRC_PATH))
 from planning_algorithms.prm import build_prm
 from planning_algorithms.dstar_lite import DStarLite
 from utils.image_processing import distance_transform, dilate, gaussian_blur
-from utils.graph_helpers import filter_graph, snap_point
+from utils.graph_helpers import filter_graph, snap_point, bresenham_line
 
 
 CACHE_DIR = Path(".cache")
@@ -160,6 +160,15 @@ def connect_neighbors(nodes: list[Tuple[int, int]]) -> list[Tuple[int, int]]:
     return result
 
 
+def path_is_collision_free(grid: np.ndarray, path: list[Tuple[int, int]]) -> bool:
+    """Return ``True`` if the path does not intersect any obstacles."""
+    for (x1, y1), (x2, y2) in zip(path[:-1], path[1:]):
+        for x, y in bresenham_line(x1, y1, x2, y2):
+            if grid[y, x] not in (0, 8, 9):
+                return False
+    return True
+
+
 def _plan(graph: nx.Graph, start: Tuple[int, int], goal: Tuple[int, int]) -> list[int]:
     """Attempt to plan a path on ``graph`` from ``start`` to ``goal``."""
     try:
@@ -248,6 +257,35 @@ def process_file(
     coord_path = [filtered.nodes[n]["pos"] for n in node_path]
     dense_path = densify_path(coord_path, step)
     full_path = connect_neighbors(dense_path)
+    if not path_is_collision_free(grid, full_path):
+        try:
+            start, goal = reposition_start_goal(grid, filtered)
+        except GroundTruthGenerationError:
+            raise
+        node_path = _plan(filtered, start, goal)
+        if len(node_path) < 2:
+            raise GroundTruthGenerationError(
+                f"process_file: planner returned empty path for {file_path}"
+            )
+        try:
+            np.savez_compressed(
+                file_path,
+                map=grid,
+                clearance=clearance,
+                step_size=step,
+                config=cfg,
+            )
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(
+                f"Failed to update input map {file_path}: {exc}", RuntimeWarning
+            )
+        coord_path = [filtered.nodes[n]["pos"] for n in node_path]
+        dense_path = densify_path(coord_path, step)
+        full_path = connect_neighbors(dense_path)
+        if not path_is_collision_free(grid, full_path):
+            raise GroundTruthGenerationError(
+                f"process_file: planned path intersects obstacles for {file_path}"
+            )
     indices = np.zeros_like(grid, dtype=np.int32)
     mask = np.zeros_like(grid, dtype=np.uint8)
     for idx, (x, y) in enumerate(dense_path, start=1):
