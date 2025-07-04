@@ -44,3 +44,8 @@ A script is provided to automatically generate synthetic occupancy grids for tra
 python scripts/data_generation/generate_pybullet_envs.py --output-dir data/raw --num-scenes 50 --archetype clutter --resolution 128
 ```
 
+When generating ground truth paths with `generate_ground_truth.py`, any
+collision between the planned path and map obstacles triggers a warning that
+includes the coordinates of the first colliding segment. This additional output
+helps diagnose problematic maps during dataset creation.
+
