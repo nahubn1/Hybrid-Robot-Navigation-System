@@ -6,7 +6,7 @@ from scipy.spatial import cKDTree
 
 
 def sample_free_points(grid: np.ndarray, num_samples: int) -> List[Tuple[int, int]]:
-    free = np.argwhere(grid == 0)
+    free = np.argwhere(np.isin(grid, (0, 8, 9)))
     if len(free) == 0:
         return []
     if len(free) <= num_samples:
@@ -38,7 +38,7 @@ def bresenham_line(x0: int, y0: int, x1: int, y1: int):
 
 def is_collision_free(grid: np.ndarray, p: Tuple[int, int], q: Tuple[int, int]) -> bool:
     for x, y in bresenham_line(p[0], p[1], q[0], q[1]):
-        if grid[y, x] != 0:
+        if grid[y, x] not in (0, 8, 9):
             return False
     return True
 
