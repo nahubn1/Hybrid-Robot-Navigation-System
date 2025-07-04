@@ -123,23 +123,22 @@ def preprocess_map(map_id: str, grid: np.ndarray, num_samples: int, k: int):
 
 
 def densify_path(nodes: list[Tuple[int, int]], step: float) -> list[Tuple[int, int]]:
-    """Interpolate path segments so consecutive points are at most ``step`` apart."""
+    """Return all grid cells along ``nodes`` using Bresenham line expansion."""
     if step <= 0:
         raise GroundTruthGenerationError("densify_path: step must be positive")
     if len(nodes) < 2:
         raise GroundTruthGenerationError("densify_path: need at least two nodes")
     result: list[Tuple[int, int]] = []
-    for i in range(len(nodes) - 1):
-        x1, y1 = nodes[i]
-        x2, y2 = nodes[i + 1]
-        dist = math.hypot(x2 - x1, y2 - y1)
-        n = max(1, int(math.ceil(dist / step)))
-        for j in range(n):
-            t = j / n
-            x = int(round(x1 + t * (x2 - x1)))
-            y = int(round(y1 + t * (y2 - y1)))
-            result.append((x, y))
-    result.append(nodes[-1])
+    last: Tuple[int, int] | None = None
+    for (x1, y1), (x2, y2) in zip(nodes[:-1], nodes[1:]):
+        for x, y in bresenham_line(x1, y1, x2, y2):
+            pt = (int(x), int(y))
+            if pt == last:
+                continue
+            result.append(pt)
+            last = pt
+    if result[-1] != nodes[-1]:
+        result.append(nodes[-1])
     return result
 
 
