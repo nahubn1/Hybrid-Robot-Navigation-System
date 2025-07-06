@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import pickle
 from pathlib import Path
+import yaml
+
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,8 +18,28 @@ from tkinter import filedialog
 SWITCH_KEY = 'n'
 
 
-def compose_visualization(sample_path: Path, gt_dir: Path, show_indices: bool = False) -> plt.Figure:
-    """Return a matplotlib figure visualizing a ground truth sample."""
+def grid_hash(grid: np.ndarray) -> str:
+    """Return a short hash string for ``grid``."""
+    h = hashlib.sha256()
+    h.update(grid.tobytes())
+    return h.hexdigest()[:16]
+
+
+def compose_visualization(
+    sample_path: Path,
+    gt_dir: Path,
+    *,
+    show_indices: bool,
+    show_prm: bool,
+    prm_samples: int,
+    prm_k: int,
+    cache_dir: Path,
+) -> plt.Figure:
+    """Return a matplotlib figure visualizing a ground truth sample.
+
+    The PRM overlay is loaded from ``cache_dir`` using the same cache key
+    employed during ground truth generation.
+    """
     base = gt_dir / sample_path.with_suffix("").name
 
     # Load base sample and ground truth arrays
@@ -48,17 +72,37 @@ def compose_visualization(sample_path: Path, gt_dir: Path, show_indices: bool = 
     goal_plot = ax.scatter(goal[0], goal[1], s=150, c="red", marker="*",
                            edgecolors="black", linewidths=1, label="Goal", zorder=3)
 
-    # --- Layer 3: probabilistic heatmap ---
+    # --- Optional Layer 3: PRM roadmap ---
+    if show_prm:
+        clearance = float(sample["clearance"])
+        step = float(sample["step_size"])
+        key = f"{grid_hash(grid)}_{prm_samples}_{prm_k}_{clearance}_{step}"
+        prm_path = cache_dir / f"{key}_filtered_prm.pkl"
+        if prm_path.exists():
+            with open(prm_path, "rb") as f:
+                prm = pickle.load(f)
+            for u, v in prm.edges():
+                x1, y1 = prm.nodes[u]["pos"]
+                x2, y2 = prm.nodes[v]["pos"]
+                ax.plot([x1, x2], [y1, y2], color="black", linewidth=0.5, alpha=0.5, zorder=2)
+            if prm.number_of_nodes() > 0:
+                pts = np.array([prm.nodes[n]["pos"] for n in prm.nodes])
+                ax.scatter(pts[:, 0], pts[:, 1], s=8, c="black", alpha=0.7, zorder=2)
+        else:
+            ax.text(0.5, 0.5, "PRM cache missing", transform=ax.transAxes, ha="center", va="center",
+                    color="red", fontsize=10, zorder=5)
+
+    # --- Layer 4: probabilistic heatmap ---
     ax.imshow(heat, cmap="viridis", alpha=0.6, origin="lower")
 
-    # --- Layer 4: raw planner path ---
+    # --- Layer 5: raw planner path ---
     path_coords = np.argwhere(indices > 0)
     order = np.argsort(indices[path_coords[:, 0], path_coords[:, 1]])
     path = path_coords[order]
     (path_plot,) = ax.plot(path[:, 1], path[:, 0], color="cyan", linewidth=1,
                            label="Raw Path", zorder=4)
 
-    # --- Optional Layer 5: step indices ---
+    # --- Optional Layer 6: step indices ---
     if show_indices:
         for y, x in path:
             idx = int(indices[y, x])
@@ -74,19 +118,42 @@ def compose_visualization(sample_path: Path, gt_dir: Path, show_indices: bool = 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Visualize ground truth samples")
-    parser.add_argument("--ground_truth_dir", type=Path, required=True,
-                        help="Directory containing ground truth .npy files")
-    parser.add_argument("--show-indices", action="store_true",
-                        help="Overlay step numbers on the path")
+    default_cfg = (
+        Path(__file__).resolve().parents[2]
+        / "configs/data_generation/visualize_ground_truth.yaml"
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=default_cfg,
+        help="YAML configuration file",
+    )
     args = parser.parse_args()
+    cfg = yaml.safe_load(args.config.read_text())
+    gt_dir = Path(cfg.get("ground_truth_dir", "data/ground_truth"))
+    show_indices = bool(cfg.get("show_indices", False))
+    show_prm = bool(cfg.get("show_prm", True))
+    prm_samples = int(cfg.get("samples", 500))
+    prm_k = int(cfg.get("k_neighbors", 10))
+    cache_dir = Path(cfg.get("cache_dir", ".cache"))
 
     root = tk.Tk()
     root.withdraw()
     while True:
-        sample_path = filedialog.askopenfilename(title="Select .npz sample file", filetypes=[("NPZ files", "*.npz")])
+        sample_path = filedialog.askopenfilename(
+            title="Select .npz sample file", filetypes=[("NPZ files", "*.npz")]
+        )
         if not sample_path:
             break
-        fig = compose_visualization(Path(sample_path), args.ground_truth_dir, args.show_indices)
+        fig = compose_visualization(
+            Path(sample_path),
+            gt_dir,
+            show_indices=show_indices,
+            show_prm=show_prm,
+            prm_samples=prm_samples,
+            prm_k=prm_k,
+            cache_dir=cache_dir,
+        )
         switch_file = {'next': False}
 
         def on_key(event):
