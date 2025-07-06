@@ -23,7 +23,13 @@ import yaml
 class GroundTruthGenerationError(RuntimeError):
     """Raised when ground truth generation fails."""
 
-    pass
+    def __init__(
+        self,
+        message: str,
+        segment: tuple[tuple[int, int], tuple[int, int]] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.segment = segment
 
 
 SRC_PATH = Path(__file__).resolve().parents[2] / "src"
@@ -142,16 +148,23 @@ def densify_path(nodes: list[Tuple[int, int]], step: float) -> list[Tuple[int, i
     return result
 
 
-def path_collision_free(grid: np.ndarray, path: list[Tuple[int, int]]) -> bool:
-    """Check that ``path`` does not intersect occupied cells in ``grid``."""
+def path_collision_free(
+    grid: np.ndarray, path: list[Tuple[int, int]]
+) -> tuple[bool, tuple[tuple[int, int], tuple[int, int]] | None]:
+    """Check that ``path`` does not intersect occupied cells in ``grid``.
+
+    Returns a tuple ``(collision_free, segment)`` where ``segment`` is the first
+    path segment that collides with an obstacle, or ``None`` if the path is
+    collision-free.
+    """
     occ = (grid != 0).astype(np.uint8)
     occ[grid == 8] = 0
     occ[grid == 9] = 0
     for (x1, y1), (x2, y2) in zip(path[:-1], path[1:]):
         for x, y in bresenham_line(x1, y1, x2, y2):
             if occ[int(y), int(x)]:
-                return False
-    return True
+                return False, ((int(x1), int(y1)), (int(x2), int(y2)))
+    return True, None
 
 
 def _plan(graph: nx.Graph, start: Tuple[int, int], goal: Tuple[int, int]) -> list[int]:
@@ -241,9 +254,11 @@ def process_file(
             )
     coord_path = [filtered.nodes[n]["pos"] for n in node_path]
     dense_path = densify_path(coord_path, step)
-    if not path_collision_free(grid, dense_path):
+    collision_free, segment = path_collision_free(grid, dense_path)
+    if not collision_free:
         raise GroundTruthGenerationError(
-            f"process_file: generated path intersects obstacles for {file_path}"
+            f"process_file: generated path intersects obstacles for {file_path} at segment {segment}",
+            segment=segment,
         )
     indices = np.zeros_like(grid, dtype=np.int32)
     mask = np.zeros_like(grid, dtype=np.uint8)
@@ -288,7 +303,10 @@ def safe_process_file(
             blur_sigma=blur_sigma,
         )
     except GroundTruthGenerationError as exc:
-        warnings.warn(str(exc), RuntimeWarning)
+        msg = str(exc)
+        if exc.segment is not None:
+            msg += f" (segment {exc.segment})"
+        warnings.warn(msg, RuntimeWarning)
     except Exception as exc:  # noqa: BLE001
         warnings.warn(f"Unexpected error processing {file_path}: {exc}", RuntimeWarning)
 
