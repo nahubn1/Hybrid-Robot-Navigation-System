@@ -282,6 +282,16 @@ def process_file(
 
     dist, base_prm = preprocess_map(map_id, grid, samples, k)
     filtered = filter_graph(base_prm, dist, clearance, step)
+    cache_key = f"{grid_hash(grid)}_{samples}_{k}_{clearance}_{step}"
+    filtered_path = CACHE_DIR / f"{cache_key}_filtered_prm.pkl"
+    if not filtered_path.exists():
+        try:
+            with open(filtered_path, "wb") as f:
+                pickle.dump(filtered, f)
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(
+                f"Failed to cache filtered PRM for {file_path}: {exc}", RuntimeWarning
+            )
     if filtered.number_of_nodes() == 0:
         raise GroundTruthGenerationError(
             f"process_file: no nodes left after filtering for {file_path}"
@@ -310,7 +320,11 @@ def process_file(
             warnings.warn(
                 f"Failed to update input map {file_path}: {exc}", RuntimeWarning
             )
-    coord_path = [filtered.nodes[n]["pos"] for n in node_path]
+    # Include the actual start and goal positions in the coordinate path so the
+    # resulting dense path begins and ends exactly at these cells.
+    coord_path = [start]
+    coord_path.extend(filtered.nodes[n]["pos"] for n in node_path)
+    coord_path.append(goal)
     dense_path = densify_path(coord_path, step)
     if not path_collision_free(grid, dense_path):
         fallback = grid_shortest_path(grid, start, goal)
