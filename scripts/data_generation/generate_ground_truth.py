@@ -10,9 +10,12 @@ from pathlib import Path
 import pickle
 import sys
 import math
-from typing import Tuple
+from typing import Tuple, Dict, Optional
+from collections import deque
 import random
 import warnings
+import hashlib
+import shutil
 from tqdm import tqdm
 import networkx as nx
 
@@ -39,6 +42,19 @@ CACHE_DIR = Path(".cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
 
+def grid_hash(grid: np.ndarray) -> str:
+    """Return a short hash string for ``grid``."""
+    h = hashlib.sha256()
+    h.update(grid.tobytes())
+    return h.hexdigest()[:16]
+
+
+def clear_cache() -> None:
+    """Remove all cached files."""
+    shutil.rmtree(CACHE_DIR, ignore_errors=True)
+    CACHE_DIR.mkdir(exist_ok=True)
+
+
 def load_config(path: Path) -> dict:
     with open(path, 'r') as f:
         return yaml.safe_load(f)
@@ -55,6 +71,11 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=str(default_cfg),
         help='YAML configuration file',
+    )
+    p.add_argument(
+        '--clear-cache',
+        action='store_true',
+        help='remove cached preprocessing results before running',
     )
 
     return p.parse_args()
@@ -86,13 +107,18 @@ def load_npz(file_path: Path):
 
 
 def preprocess_map(map_id: str, grid: np.ndarray, num_samples: int, k: int):
-    """Compute and cache distance transform and PRM for a map."""
+    """Compute and cache distance transform and PRM for a map.
+
+    The cache key is derived from a hash of ``grid`` so identical maps share
+    cached results regardless of filename.
+    """
     if grid.size == 0:
         raise GroundTruthGenerationError(
             f"preprocess_map: empty grid for map_id={map_id}"
         )
-    dist_path = CACHE_DIR / f"{map_id}_dist.npy"
-    prm_path = CACHE_DIR / f"{map_id}_prm.pkl"
+    key = f"{grid_hash(grid)}_{num_samples}_{k}"
+    dist_path = CACHE_DIR / f"{key}_dist.npy"
+    prm_path = CACHE_DIR / f"{key}_prm.pkl"
     if dist_path.exists() and prm_path.exists():
         try:
             dist = np.load(dist_path)
@@ -153,6 +179,38 @@ def path_collision_free(grid: np.ndarray, path: list[Tuple[int, int]]) -> bool:
             if occ[int(y), int(x)]:
                 return False
     return True
+
+
+def grid_shortest_path(
+    grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]
+) -> list[Tuple[int, int]]:
+    """Return a simple BFS path on the grid from ``start`` to ``goal``."""
+    h, w = grid.shape
+    sy, sx = start[1], start[0]
+    gy, gx = goal[1], goal[0]
+    q = deque([(sy, sx)])
+    parents: Dict[Tuple[int, int], Optional[Tuple[int, int]]] = {(sy, sx): None}
+    free = lambda y, x: grid[y, x] in (0, 8, 9)
+    while q:
+        y, x = q.popleft()
+        if (y, x) == (gy, gx):
+            break
+        for dy, dx in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and free(ny, nx):
+                if (ny, nx) not in parents:
+                    parents[(ny, nx)] = (y, x)
+                    q.append((ny, nx))
+    if (gy, gx) not in parents:
+        return []
+    path = []
+    cur = (gy, gx)
+    while cur is not None:
+        cy, cx = cur
+        path.append((cx, cy))
+        cur = parents[cur]
+    path.reverse()
+    return path
 
 
 def _plan(graph: nx.Graph, start: Tuple[int, int], goal: Tuple[int, int]) -> list[int]:
@@ -243,9 +301,12 @@ def process_file(
     coord_path = [filtered.nodes[n]["pos"] for n in node_path]
     dense_path = densify_path(coord_path, step)
     if not path_collision_free(grid, dense_path):
-        raise GroundTruthGenerationError(
-            f"process_file: generated path intersects obstacles for {file_path}"
-        )
+        fallback = grid_shortest_path(grid, start, goal)
+        if not fallback or not path_collision_free(grid, fallback):
+            raise GroundTruthGenerationError(
+                f"process_file: generated path intersects obstacles for {file_path}"
+            )
+        dense_path = fallback
     indices = np.zeros_like(grid, dtype=np.int32)
     mask = np.zeros_like(grid, dtype=np.uint8)
     for idx, (x, y) in enumerate(dense_path, start=1):
@@ -296,6 +357,8 @@ def safe_process_file(
 
 def main() -> None:
     args = parse_args()
+    if args.clear_cache:
+        clear_cache()
     cfg = load_config(Path(args.config))
 
     try:
