@@ -26,7 +26,13 @@ import yaml
 class GroundTruthGenerationError(RuntimeError):
     """Raised when ground truth generation fails."""
 
-    pass
+    def __init__(
+        self,
+        message: str,
+        segment: tuple[tuple[int, int], tuple[int, int]] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.segment = segment
 
 
 SRC_PATH = Path(__file__).resolve().parents[2] / "src"
@@ -149,36 +155,42 @@ def preprocess_map(map_id: str, grid: np.ndarray, num_samples: int, k: int):
 
 
 def densify_path(nodes: list[Tuple[int, int]], step: float) -> list[Tuple[int, int]]:
-    """Interpolate path segments so consecutive points are at most ``step`` apart."""
+    """Return all grid cells along ``nodes`` using Bresenham line expansion."""
     if step <= 0:
         raise GroundTruthGenerationError("densify_path: step must be positive")
     if len(nodes) < 2:
         raise GroundTruthGenerationError("densify_path: need at least two nodes")
     result: list[Tuple[int, int]] = []
-    for i in range(len(nodes) - 1):
-        x1, y1 = nodes[i]
-        x2, y2 = nodes[i + 1]
-        dist = math.hypot(x2 - x1, y2 - y1)
-        n = max(1, int(math.ceil(dist / step)))
-        for j in range(n):
-            t = j / n
-            x = int(round(x1 + t * (x2 - x1)))
-            y = int(round(y1 + t * (y2 - y1)))
-            result.append((x, y))
-    result.append(nodes[-1])
+    last: Tuple[int, int] | None = None
+    for (x1, y1), (x2, y2) in zip(nodes[:-1], nodes[1:]):
+        for x, y in bresenham_line(x1, y1, x2, y2):
+            pt = (int(x), int(y))
+            if pt == last:
+                continue
+            result.append(pt)
+            last = pt
+    if result[-1] != nodes[-1]:
+        result.append(nodes[-1])
     return result
 
 
-def path_collision_free(grid: np.ndarray, path: list[Tuple[int, int]]) -> bool:
-    """Check that ``path`` does not intersect occupied cells in ``grid``."""
+def path_collision_free(
+    grid: np.ndarray, path: list[Tuple[int, int]]
+) -> tuple[bool, tuple[tuple[int, int], tuple[int, int]] | None]:
+    """Check that ``path`` does not intersect occupied cells in ``grid``.
+
+    Returns a tuple ``(collision_free, segment)`` where ``segment`` is the first
+    path segment that collides with an obstacle, or ``None`` if the path is
+    collision-free.
+    """
     occ = (grid != 0).astype(np.uint8)
     occ[grid == 8] = 0
     occ[grid == 9] = 0
     for (x1, y1), (x2, y2) in zip(path[:-1], path[1:]):
         for x, y in bresenham_line(x1, y1, x2, y2):
             if occ[int(y), int(x)]:
-                return False
-    return True
+                return False, ((int(x1), int(y1)), (int(x2), int(y2)))
+    return True, None
 
 
 def grid_shortest_path(
@@ -350,7 +362,10 @@ def safe_process_file(
             blur_sigma=blur_sigma,
         )
     except GroundTruthGenerationError as exc:
-        warnings.warn(str(exc), RuntimeWarning)
+        msg = str(exc)
+        if exc.segment is not None:
+            msg += f" (segment {exc.segment})"
+        warnings.warn(msg, RuntimeWarning)
     except Exception as exc:  # noqa: BLE001
         warnings.warn(f"Unexpected error processing {file_path}: {exc}", RuntimeWarning)
 
