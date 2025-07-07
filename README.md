@@ -50,5 +50,11 @@ includes the coordinates of the first colliding segment. This additional output
 helps diagnose problematic maps during dataset creation.
 
 
-The script caches probabilistic roadmaps in `.cache/`. Use `--clear-cache` to remove existing cache files before generating new data.
-Ground truth visualization parameters are read from `configs/data_generation/visualize_ground_truth.yaml`, which also controls whether the cached PRM overlay is shown.
+
+The generator stores PRM data in directories defined in
+`configs/data_generation/ground_truth_generation.yaml`. Set
+`clear_cache: true` in that file to remove existing cache files before
+running. Set `save_filtered_prm: false` to skip writing the filtered
+roadmap cache. Ground truth visualization parameters are read from
+`configs/data_generation/visualize_ground_truth.yaml`, which also
+controls whether the cached PRM overlay is shown.

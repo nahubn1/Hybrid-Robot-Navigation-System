@@ -33,11 +33,11 @@ def compose_visualization(
     show_prm: bool,
     prm_samples: int,
     prm_k: int,
-    cache_dir: Path,
+    filtered_cache_dir: Path,
 ) -> plt.Figure:
     """Return a matplotlib figure visualizing a ground truth sample.
 
-    The PRM overlay is loaded from ``cache_dir`` using the same cache key
+    The PRM overlay is loaded from ``filtered_cache_dir`` using the same cache key
     employed during ground truth generation.
     """
     base = gt_dir / sample_path.with_suffix("").name
@@ -77,7 +77,8 @@ def compose_visualization(
         clearance = float(sample["clearance"])
         step = float(sample["step_size"])
         key = f"{grid_hash(grid)}_{prm_samples}_{prm_k}_{clearance}_{step}"
-        prm_path = cache_dir / f"{key}_filtered_prm.pkl"
+
+        prm_path = filtered_cache_dir / f"{key}_filtered_prm.pkl"
         if prm_path.exists():
             with open(prm_path, "rb") as f:
                 prm = pickle.load(f)
@@ -135,8 +136,7 @@ def main() -> None:
     show_prm = bool(cfg.get("show_prm", True))
     prm_samples = int(cfg.get("samples", 500))
     prm_k = int(cfg.get("k_neighbors", 10))
-    cache_dir = Path(cfg.get("cache_dir", ".cache"))
-
+    filtered_cache_dir = Path(cfg.get("filtered_cache_dir", ".cache/filtered"))
     root = tk.Tk()
     root.withdraw()
     while True:
@@ -152,7 +152,7 @@ def main() -> None:
             show_prm=show_prm,
             prm_samples=prm_samples,
             prm_k=prm_k,
-            cache_dir=cache_dir,
+            filtered_cache_dir=filtered_cache_dir,
         )
         switch_file = {'next': False}
 

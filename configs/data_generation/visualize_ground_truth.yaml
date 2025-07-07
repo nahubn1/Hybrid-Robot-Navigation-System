@@ -1,8 +1,8 @@
 # Configuration for ground truth visualization
 # Path to directory containing generated ground truth .npz files
 ground_truth_dir: data/ground_truth
-# Directory where cached PRMs are stored
-cache_dir: .cache
+# Directory where filtered PRMs are stored
+filtered_cache_dir: .cache/filtered
 # PRM parameters used during ground truth generation
 samples: 500
 k_neighbors: 10
