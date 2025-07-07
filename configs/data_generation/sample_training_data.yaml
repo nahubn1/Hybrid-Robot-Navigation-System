@@ -2,6 +2,7 @@ seed: 42
 output_dir: data/test_samples
 num_maps: 10
 samples_per_map: 2
+processes: 1
 map_resolution: 200
 shell_thickness: 2
 bsp:
