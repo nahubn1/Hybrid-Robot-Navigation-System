@@ -50,7 +50,6 @@ includes the coordinates of the first colliding segment. This additional output
 helps diagnose problematic maps during dataset creation.
 
 
-
 The generator stores PRM data in directories defined in
 `configs/data_generation/ground_truth_generation.yaml`. Set
 `clear_cache: true` in that file to remove existing cache files before

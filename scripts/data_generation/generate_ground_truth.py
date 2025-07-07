@@ -113,14 +113,16 @@ def preprocess_map(
 ):
     """Compute and cache distance transform and PRM for a map.
 
-    The cache key is derived from a hash of ``grid`` so identical maps share
-    cached results regardless of filename.
+    ``map_id`` identifies the underlying base map so identical maps across
+    different environments reuse the same cached data.
     """
     if grid.size == 0:
         raise GroundTruthGenerationError(
             f"preprocess_map: empty grid for map_id={map_id}"
         )
-    key = f"{grid_hash(grid)}_{num_samples}_{k}"
+
+    key = f"{map_id}_{num_samples}_{k}"
+
     dist_path = cache_dir / f"{key}_dist.npy"
     prm_path = cache_dir / f"{key}_prm.pkl"
     if dist_path.exists() and prm_path.exists():
@@ -283,7 +285,9 @@ def process_file(
 
     dist, base_prm = preprocess_map(map_id, grid, samples, k, cache_dir)
     filtered = filter_graph(base_prm, dist, clearance, step)
-    cache_key = f"{grid_hash(grid)}_{samples}_{k}_{clearance}_{step}"
+
+    cache_key = f"{file_path.stem}_{samples}_{k}_{clearance}_{step}"
+
     filtered_path = filtered_cache_dir / f"{cache_key}_filtered_prm.pkl"
     if save_filtered_prm and not filtered_path.exists():
         try:

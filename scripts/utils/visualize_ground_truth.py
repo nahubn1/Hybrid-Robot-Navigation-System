@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
+
+
 import pickle
 from pathlib import Path
 import yaml
@@ -18,11 +19,6 @@ from tkinter import filedialog
 SWITCH_KEY = 'n'
 
 
-def grid_hash(grid: np.ndarray) -> str:
-    """Return a short hash string for ``grid``."""
-    h = hashlib.sha256()
-    h.update(grid.tobytes())
-    return h.hexdigest()[:16]
 
 
 def compose_visualization(
@@ -76,7 +72,8 @@ def compose_visualization(
     if show_prm:
         clearance = float(sample["clearance"])
         step = float(sample["step_size"])
-        key = f"{grid_hash(grid)}_{prm_samples}_{prm_k}_{clearance}_{step}"
+
+        key = f"{sample_path.stem}_{prm_samples}_{prm_k}_{clearance}_{step}"
 
         prm_path = filtered_cache_dir / f"{key}_filtered_prm.pkl"
         if prm_path.exists():
@@ -137,6 +134,7 @@ def main() -> None:
     prm_samples = int(cfg.get("samples", 500))
     prm_k = int(cfg.get("k_neighbors", 10))
     filtered_cache_dir = Path(cfg.get("filtered_cache_dir", ".cache/filtered"))
+
     root = tk.Tk()
     root.withdraw()
     while True:
