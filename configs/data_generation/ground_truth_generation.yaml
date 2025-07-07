@@ -5,3 +5,11 @@ k_neighbors: 10
 processes: 1
 dilate_radius: 2
 blur_sigma: 1.0
+# Directory for distance transform and base PRM cache
+cache_dir: .cache/base
+# Directory for filtered PRM cache
+filtered_cache_dir: .cache/filtered
+# Whether to store the filtered PRM for each environment
+save_filtered_prm: true
+# Remove cached files before running
+clear_cache: false
