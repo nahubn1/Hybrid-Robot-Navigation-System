@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 
-
 import pickle
 from pathlib import Path
 import yaml
@@ -20,15 +19,13 @@ SWITCH_KEY = 'n'
 
 
 
-
 def compose_visualization(
     sample_path: Path,
     gt_dir: Path,
     *,
     show_indices: bool,
     show_prm: bool,
-    prm_samples: int,
-    prm_k: int,
+
     filtered_cache_dir: Path,
 ) -> plt.Figure:
     """Return a matplotlib figure visualizing a ground truth sample.
@@ -70,10 +67,8 @@ def compose_visualization(
 
     # --- Optional Layer 3: PRM roadmap ---
     if show_prm:
-        clearance = float(sample["clearance"])
-        step = float(sample["step_size"])
 
-        key = f"{sample_path.stem}_{prm_samples}_{prm_k}_{clearance}_{step}"
+        key = sample_path.stem
 
         prm_path = filtered_cache_dir / f"{key}_filtered_prm.pkl"
         if prm_path.exists():
@@ -131,8 +126,7 @@ def main() -> None:
     gt_dir = Path(cfg.get("ground_truth_dir", "data/ground_truth"))
     show_indices = bool(cfg.get("show_indices", False))
     show_prm = bool(cfg.get("show_prm", True))
-    prm_samples = int(cfg.get("samples", 500))
-    prm_k = int(cfg.get("k_neighbors", 10))
+
     filtered_cache_dir = Path(cfg.get("filtered_cache_dir", ".cache/filtered"))
 
     root = tk.Tk()
@@ -148,8 +142,7 @@ def main() -> None:
             gt_dir,
             show_indices=show_indices,
             show_prm=show_prm,
-            prm_samples=prm_samples,
-            prm_k=prm_k,
+
             filtered_cache_dir=filtered_cache_dir,
         )
         switch_file = {'next': False}

@@ -10,7 +10,7 @@ from pathlib import Path
 import pickle
 import sys
 import math
-from typing import Tuple, Dict, Optional
+from typing import Dict, Optional, Tuple
 from collections import deque
 import random
 import warnings
@@ -43,12 +43,6 @@ from planning_algorithms.dstar_lite import DStarLite
 from utils.image_processing import distance_transform, dilate, gaussian_blur
 from utils.graph_helpers import filter_graph, snap_point, bresenham_line
 
-
-def grid_hash(grid: np.ndarray) -> str:
-    """Return a short hash string for ``grid``."""
-    h = hashlib.sha256()
-    h.update(grid.tobytes())
-    return h.hexdigest()[:16]
 
 
 def clear_cache(cache_dir: Path, filtered_cache_dir: Path) -> None:
@@ -121,7 +115,7 @@ def preprocess_map(
             f"preprocess_map: empty grid for map_id={map_id}"
         )
 
-    key = f"{map_id}_{num_samples}_{k}"
+    key = map_id
 
     dist_path = cache_dir / f"{key}_dist.npy"
     prm_path = cache_dir / f"{key}_prm.pkl"
@@ -286,7 +280,7 @@ def process_file(
     dist, base_prm = preprocess_map(map_id, grid, samples, k, cache_dir)
     filtered = filter_graph(base_prm, dist, clearance, step)
 
-    cache_key = f"{file_path.stem}_{samples}_{k}_{clearance}_{step}"
+    cache_key = file_path.stem
 
     filtered_path = filtered_cache_dir / f"{cache_key}_filtered_prm.pkl"
     if save_filtered_prm and not filtered_path.exists():
