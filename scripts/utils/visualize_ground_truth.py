@@ -77,6 +77,7 @@ def compose_visualization(
         clearance = float(sample["clearance"])
         step = float(sample["step_size"])
         key = f"{grid_hash(grid)}_{prm_samples}_{prm_k}_{clearance}_{step}"
+
         prm_path = filtered_cache_dir / f"{key}_filtered_prm.pkl"
         if prm_path.exists():
             with open(prm_path, "rb") as f:
@@ -136,7 +137,6 @@ def main() -> None:
     prm_samples = int(cfg.get("samples", 500))
     prm_k = int(cfg.get("k_neighbors", 10))
     filtered_cache_dir = Path(cfg.get("filtered_cache_dir", ".cache/filtered"))
-
     root = tk.Tk()
     root.withdraw()
     while True:

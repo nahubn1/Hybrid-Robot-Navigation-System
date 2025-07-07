@@ -298,13 +298,13 @@ def process_file(
             f"process_file: no nodes left after filtering for {file_path}"
         )
     node_path = _plan(filtered, start, goal)
-    if not node_path:
+    if len(node_path) < 2:
         try:
             start, goal = reposition_start_goal(grid, filtered)
         except GroundTruthGenerationError:
             raise
         node_path = _plan(filtered, start, goal)
-        if not node_path:
+        if len(node_path) < 2:
             raise GroundTruthGenerationError(
                 f"process_file: planner returned empty path for {file_path}"
             )
