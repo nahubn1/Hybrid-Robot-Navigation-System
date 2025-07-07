@@ -49,3 +49,14 @@ collision between the planned path and map obstacles triggers a warning that
 includes the coordinates of the first colliding segment. This additional output
 helps diagnose problematic maps during dataset creation.
 
+
+The generator stores PRM data in directories defined in
+`configs/data_generation/ground_truth_generation.yaml`. Base map caches
+are named `mapXXXX_prm.pkl` and `mapXXXX_dist.npy` so multiple
+environments share the same files. Filtered PRM caches use the full
+sample stem such as `map0001_s02_r00_filtered_prm.pkl`. Set
+`clear_cache: true` in that file to remove existing cache files before
+running. Set `save_filtered_prm: false` to skip writing the filtered
+roadmap cache. Ground truth visualization parameters are read from
+`configs/data_generation/visualize_ground_truth.yaml`, which also
+controls whether the cached PRM overlay is shown.
