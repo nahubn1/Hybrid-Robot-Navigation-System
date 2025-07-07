@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+
+
 import pickle
 from pathlib import Path
 import yaml
@@ -15,6 +17,8 @@ from tkinter import filedialog
 
 # Use a key that doesn't conflict with matplotlib's shortcuts, e.g., 'N' for next
 SWITCH_KEY = 'n'
+
+
 
 
 def compose_visualization(
@@ -68,7 +72,9 @@ def compose_visualization(
     if show_prm:
         clearance = float(sample["clearance"])
         step = float(sample["step_size"])
+
         key = f"{sample_path.stem}_{prm_samples}_{prm_k}_{clearance}_{step}"
+
         prm_path = filtered_cache_dir / f"{key}_filtered_prm.pkl"
         if prm_path.exists():
             with open(prm_path, "rb") as f:
