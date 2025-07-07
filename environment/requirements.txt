@@ -5,3 +5,6 @@ networkx
 pytest
 matplotlib
 pillow
+tqdm
+scipy
+filelock

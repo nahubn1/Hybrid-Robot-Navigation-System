@@ -18,6 +18,7 @@ import hashlib
 import shutil
 from tqdm import tqdm
 import networkx as nx
+from filelock import FileLock
 
 import numpy as np
 import yaml
@@ -119,33 +120,36 @@ def preprocess_map(
 
     dist_path = cache_dir / f"{key}_dist.npy"
     prm_path = cache_dir / f"{key}_prm.pkl"
-    if dist_path.exists() and prm_path.exists():
+    lock_path = cache_dir / f"{key}.lock"
+    with FileLock(lock_path):
+        if dist_path.exists() and prm_path.exists():
+            try:
+                dist = np.load(dist_path)
+                with open(prm_path, "rb") as f:
+                    prm = pickle.load(f)
+                return dist, prm
+            except Exception:
+                # Corrupted cache files can occur if a previous run was interrupted
+                # while writing. Remove them and regenerate from scratch.
+                dist_path.unlink(missing_ok=True)
+                prm_path.unlink(missing_ok=True)
+
         try:
-            dist = np.load(dist_path)
-            with open(prm_path, "rb") as f:
-                prm = pickle.load(f)
-            return dist, prm
-        except Exception:
-            # Corrupted cache files can occur if a previous run was interrupted
-            # while writing. Remove them and regenerate from scratch.
-            dist_path.unlink(missing_ok=True)
-            prm_path.unlink(missing_ok=True)
-    try:
-        dist = distance_transform((grid != 0).astype(np.uint8))
-        prm = build_prm((grid != 0).astype(np.uint8), num_samples=num_samples, k=k)
-    except Exception as exc:
-        raise GroundTruthGenerationError(
-            f"preprocess_map: failed to build PRM for {map_id}: {exc}"
-        ) from exc
-    try:
-        np.save(dist_path, dist)
-        with open(prm_path, "wb") as f:
-            pickle.dump(prm, f)
-    except Exception as exc:
-        raise GroundTruthGenerationError(
-            f"preprocess_map: failed to write cache for {map_id}: {exc}"
-        ) from exc
-    return dist, prm
+            dist = distance_transform((grid != 0).astype(np.uint8))
+            prm = build_prm((grid != 0).astype(np.uint8), num_samples=num_samples, k=k)
+        except Exception as exc:
+            raise GroundTruthGenerationError(
+                f"preprocess_map: failed to build PRM for {map_id}: {exc}"
+            ) from exc
+        try:
+            np.save(dist_path, dist)
+            with open(prm_path, "wb") as f:
+                pickle.dump(prm, f)
+        except Exception as exc:
+            raise GroundTruthGenerationError(
+                f"preprocess_map: failed to write cache for {map_id}: {exc}"
+            ) from exc
+        return dist, prm
 
 
 def densify_path(nodes: list[Tuple[int, int]], step: float) -> list[Tuple[int, int]]:
