@@ -10,7 +10,7 @@ from pathlib import Path
 import pickle
 import sys
 import math
-from typing import Tuple, Dict, Optional
+from typing import Dict, Optional, Tuple
 from collections import deque
 import random
 import warnings
@@ -44,21 +44,12 @@ from utils.image_processing import distance_transform, dilate, gaussian_blur
 from utils.graph_helpers import filter_graph, snap_point, bresenham_line
 
 
-CACHE_DIR = Path(".cache")
-CACHE_DIR.mkdir(exist_ok=True)
-
-
-def grid_hash(grid: np.ndarray) -> str:
-    """Return a short hash string for ``grid``."""
-    h = hashlib.sha256()
-    h.update(grid.tobytes())
-    return h.hexdigest()[:16]
-
-
-def clear_cache() -> None:
-    """Remove all cached files."""
-    shutil.rmtree(CACHE_DIR, ignore_errors=True)
-    CACHE_DIR.mkdir(exist_ok=True)
+def clear_cache(cache_dir: Path, filtered_cache_dir: Path) -> None:
+    """Remove all cached files in ``cache_dir`` and ``filtered_cache_dir``."""
+    shutil.rmtree(cache_dir, ignore_errors=True)
+    shutil.rmtree(filtered_cache_dir, ignore_errors=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    filtered_cache_dir.mkdir(parents=True, exist_ok=True)
 
 
 def load_config(path: Path) -> dict:
@@ -78,12 +69,6 @@ def parse_args() -> argparse.Namespace:
         default=str(default_cfg),
         help='YAML configuration file',
     )
-    p.add_argument(
-        '--clear-cache',
-        action='store_true',
-        help='remove cached preprocessing results before running',
-    )
-
     return p.parse_args()
 
 
@@ -112,19 +97,25 @@ def load_npz(file_path: Path):
     return grid, c, s, cfg
 
 
-def preprocess_map(map_id: str, grid: np.ndarray, num_samples: int, k: int):
+def preprocess_map(
+    map_id: str,
+    grid: np.ndarray,
+    num_samples: int,
+    k: int,
+    cache_dir: Path,
+):
     """Compute and cache distance transform and PRM for a map.
 
-    The cache key is derived from a hash of ``grid`` so identical maps share
-    cached results regardless of filename.
+    ``map_id`` identifies the underlying base map so identical maps across
+    different environments reuse the same cached data.
     """
     if grid.size == 0:
         raise GroundTruthGenerationError(
             f"preprocess_map: empty grid for map_id={map_id}"
         )
-    key = f"{grid_hash(grid)}_{num_samples}_{k}"
-    dist_path = CACHE_DIR / f"{key}_dist.npy"
-    prm_path = CACHE_DIR / f"{key}_prm.pkl"
+    key = map_id
+    dist_path = cache_dir / f"{key}_dist.npy"
+    prm_path = cache_dir / f"{key}_prm.pkl"
     if dist_path.exists() and prm_path.exists():
         try:
             dist = np.load(dist_path)
@@ -268,6 +259,9 @@ def process_file(
     k: int,
     dil_rad: int,
     blur_sigma: float,
+    cache_dir: Path,
+    filtered_cache_dir: Path,
+    save_filtered_prm: bool,
 ):
     grid, clearance, step, cfg = load_npz(file_path)
     map_id = file_path.stem.split("_")[0]
@@ -280,8 +274,18 @@ def process_file(
     start = tuple(starts[0][::-1])
     goal = tuple(goals[0][::-1])
 
-    dist, base_prm = preprocess_map(map_id, grid, samples, k)
+    dist, base_prm = preprocess_map(map_id, grid, samples, k, cache_dir)
     filtered = filter_graph(base_prm, dist, clearance, step)
+    cache_key = file_path.stem
+    filtered_path = filtered_cache_dir / f"{cache_key}_filtered_prm.pkl"
+    if save_filtered_prm and not filtered_path.exists():
+        try:
+            with open(filtered_path, "wb") as f:
+                pickle.dump(filtered, f)
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(
+                f"Failed to cache filtered PRM for {file_path}: {exc}", RuntimeWarning
+            )
     if filtered.number_of_nodes() == 0:
         raise GroundTruthGenerationError(
             f"process_file: no nodes left after filtering for {file_path}"
@@ -310,7 +314,11 @@ def process_file(
             warnings.warn(
                 f"Failed to update input map {file_path}: {exc}", RuntimeWarning
             )
-    coord_path = [filtered.nodes[n]["pos"] for n in node_path]
+    # Include the actual start and goal positions in the coordinate path so the
+    # resulting dense path begins and ends exactly at these cells.
+    coord_path = [start]
+    coord_path.extend(filtered.nodes[n]["pos"] for n in node_path)
+    coord_path.append(goal)
     dense_path = densify_path(coord_path, step)
     if not path_collision_free(grid, dense_path):
         fallback = grid_shortest_path(grid, start, goal)
@@ -350,6 +358,9 @@ def safe_process_file(
     k: int,
     dil_rad: int,
     blur_sigma: float,
+    cache_dir: Path,
+    filtered_cache_dir: Path,
+    save_filtered_prm: bool,
 ) -> None:
     """Run ``process_file`` and issue a warning if it fails."""
     try:
@@ -360,6 +371,9 @@ def safe_process_file(
             k=k,
             dil_rad=dil_rad,
             blur_sigma=blur_sigma,
+            cache_dir=cache_dir,
+            filtered_cache_dir=filtered_cache_dir,
+            save_filtered_prm=save_filtered_prm,
         )
     except GroundTruthGenerationError as exc:
         msg = str(exc)
@@ -372,9 +386,15 @@ def safe_process_file(
 
 def main() -> None:
     args = parse_args()
-    if args.clear_cache:
-        clear_cache()
     cfg = load_config(Path(args.config))
+
+    cache_dir = Path(cfg.get('cache_dir', '.cache'))
+    filtered_cache_dir = Path(cfg.get('filtered_cache_dir', cache_dir))
+    save_filtered_prm = bool(cfg.get('save_filtered_prm', True))
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    filtered_cache_dir.mkdir(parents=True, exist_ok=True)
+    if cfg.get('clear_cache', False):
+        clear_cache(cache_dir, filtered_cache_dir)
 
     try:
         input_dir = Path(cfg['input_dir'])
@@ -399,6 +419,9 @@ def main() -> None:
         k=k_neigh,
         dil_rad=dil_rad,
         blur_sigma=blur_sigma,
+        cache_dir=cache_dir,
+        filtered_cache_dir=filtered_cache_dir,
+        save_filtered_prm=save_filtered_prm,
     )
     if processes > 1:
         with Pool(processes) as pool:
