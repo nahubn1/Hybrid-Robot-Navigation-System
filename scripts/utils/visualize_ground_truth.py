@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+
 import pickle
 from pathlib import Path
 import yaml
@@ -17,12 +18,14 @@ from tkinter import filedialog
 SWITCH_KEY = 'n'
 
 
+
 def compose_visualization(
     sample_path: Path,
     gt_dir: Path,
     *,
     show_indices: bool,
     show_prm: bool,
+
     filtered_cache_dir: Path,
 ) -> plt.Figure:
     """Return a matplotlib figure visualizing a ground truth sample.
@@ -64,7 +67,9 @@ def compose_visualization(
 
     # --- Optional Layer 3: PRM roadmap ---
     if show_prm:
+
         key = sample_path.stem
+
         prm_path = filtered_cache_dir / f"{key}_filtered_prm.pkl"
         if prm_path.exists():
             with open(prm_path, "rb") as f:
@@ -121,6 +126,7 @@ def main() -> None:
     gt_dir = Path(cfg.get("ground_truth_dir", "data/ground_truth"))
     show_indices = bool(cfg.get("show_indices", False))
     show_prm = bool(cfg.get("show_prm", True))
+
     filtered_cache_dir = Path(cfg.get("filtered_cache_dir", ".cache/filtered"))
 
     root = tk.Tk()
@@ -136,6 +142,7 @@ def main() -> None:
             gt_dir,
             show_indices=show_indices,
             show_prm=show_prm,
+
             filtered_cache_dir=filtered_cache_dir,
         )
         switch_file = {'next': False}

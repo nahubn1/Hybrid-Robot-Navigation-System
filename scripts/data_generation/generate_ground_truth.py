@@ -44,6 +44,7 @@ from utils.image_processing import distance_transform, dilate, gaussian_blur
 from utils.graph_helpers import filter_graph, snap_point, bresenham_line
 
 
+
 def clear_cache(cache_dir: Path, filtered_cache_dir: Path) -> None:
     """Remove all cached files in ``cache_dir`` and ``filtered_cache_dir``."""
     shutil.rmtree(cache_dir, ignore_errors=True)
@@ -113,7 +114,9 @@ def preprocess_map(
         raise GroundTruthGenerationError(
             f"preprocess_map: empty grid for map_id={map_id}"
         )
+
     key = map_id
+
     dist_path = cache_dir / f"{key}_dist.npy"
     prm_path = cache_dir / f"{key}_prm.pkl"
     if dist_path.exists() and prm_path.exists():
@@ -276,7 +279,9 @@ def process_file(
 
     dist, base_prm = preprocess_map(map_id, grid, samples, k, cache_dir)
     filtered = filter_graph(base_prm, dist, clearance, step)
+
     cache_key = file_path.stem
+
     filtered_path = filtered_cache_dir / f"{cache_key}_filtered_prm.pkl"
     if save_filtered_prm and not filtered_path.exists():
         try:
@@ -291,13 +296,13 @@ def process_file(
             f"process_file: no nodes left after filtering for {file_path}"
         )
     node_path = _plan(filtered, start, goal)
-    if not node_path:
+    if len(node_path) < 2:
         try:
             start, goal = reposition_start_goal(grid, filtered)
         except GroundTruthGenerationError:
             raise
         node_path = _plan(filtered, start, goal)
-        if not node_path:
+        if len(node_path) < 2:
             raise GroundTruthGenerationError(
                 f"process_file: planner returned empty path for {file_path}"
             )
