@@ -1,18 +1,18 @@
 seed: 42
-output_dir: data/training_samples
-num_maps: 2
+output_dir: data/test_samples
+num_maps: 10
 samples_per_map: 2
 map_resolution: 200
 shell_thickness: 2
 bsp:
-  min_leaf_size: 30
+  min_leaf_size: 45
   split_range: [0.3, 0.7]
   wall_thickness: 2
 doors:
-  width_range: [10, 15]
+  width_range: [15, 20]
   additional_door_probability: 0.9
 obstacles:
-  count_range_per_room: [1, 3]
+  count_range_per_room: [2, 5]
   door_clearance: 6
   obstacle_clearance: 6  
   shape_definitions:
