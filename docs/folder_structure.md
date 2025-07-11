@@ -4,16 +4,26 @@ This document provides an overview of the main folders in the repository and the
 
 ```
 .
+├── .devcontainer/       # Development container configuration
+├── .github/             # GitHub settings and workflows
+├── assets/              # URDF models and other simulation assets
 ├── configs/             # Configuration files for models, planners and simulation
+│   ├── data_generation/ # Parameters for dataset creation scripts
+│   ├── dataset/         # Dataset description files
 │   ├── dnn/             # DNN specific settings
 │   ├── prm/             # PRM sampling and graph parameters
 │   ├── dwa/             # DWA tuning parameters
 │   └── simulation/      # Environment and scenario definitions
+├── copilot/             # Minimal example module with its own tests
+│   └── tests/
 ├── data/                # Datasets used for training and evaluation
 │   ├── raw/             # Generated environments and initial data
-│   └── processed/       # Data processed for DNN training
+│   ├── processed/       # Data processed for DNN training
+│   └── training_samples/ # Cached training samples
 ├── docs/                # Documentation and research notes
 ├── environment/         # Dependency lists and environment setup files
+│   ├── requirements.txt
+│   └── setup.sh
 ├── models/              # Saved machine learning models
 │   └── dnn_guidance/    # Checkpoints for the guidance network
 ├── notebooks/           # Jupyter notebooks for experimentation and analysis
@@ -28,12 +38,15 @@ This document provides an overview of the main folders in the repository and the
 │   ├── data_generation/
 │   ├── model_training/
 │   ├── evaluation/
-│   └── deployment/
+│   ├── simulation/
+│   └── utils/
 ├── src/                 # Source code of the hybrid navigation system
 │   ├── data_generation/
 │   ├── dnn_guidance/
 │   ├── dwa_planner/
 │   ├── hybrid_system/
+│   ├── mapping/
+│   ├── planning_algorithms/
 │   ├── prm_planner/
 │   ├── simulation/
 │   └── utils/
