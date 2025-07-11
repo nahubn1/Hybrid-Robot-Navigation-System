@@ -26,7 +26,7 @@ This document provides an overview of the main folders in the repository and the
 │   └── setup.sh
 ├── models/              # Saved machine learning models
 │   └── dnn_guidance/    # Checkpoints for the guidance network
-├── notebooks/           # Jupyter notebooks for experimentation and analysis
+├── notebooks/           # notebooks for experimentation and analysis
 │   ├── data_exploration/
 │   ├── model_prototyping/
 │   └── results_analysis/
