@@ -59,3 +59,38 @@ class DecoderBlock(nn.Module):
         x1 = self.up(x1)
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
+
+
+class FiLMLayer(nn.Module):
+    """Feature-wise Linear Modulation layer.
+
+    This layer modulates a feature map using a vector of robot parameters. It
+    computes ``gamma`` and ``beta`` through a small MLP and applies the FiLM
+    transformation: ``x * (1 + gamma) + beta``.
+
+    Parameters
+    ----------
+    robot_param_dim : int
+        Dimensionality of the input robot parameter vector.
+    feature_map_channels : int
+        Number of channels in the feature map to be modulated.
+    """
+
+    def __init__(self, robot_param_dim: int, feature_map_channels: int) -> None:
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(robot_param_dim, 64),
+            nn.ReLU(inplace=True),
+            nn.Linear(64, feature_map_channels * 2),
+        )
+
+    def forward(
+        self, feature_map: torch.Tensor, robot_vector: torch.Tensor
+    ) -> torch.Tensor:
+        """Apply FiLM modulation to ``feature_map`` using ``robot_vector``."""
+
+        params = self.mlp(robot_vector)
+        gamma, beta = torch.chunk(params, 2, dim=1)
+        gamma = gamma.unsqueeze(-1).unsqueeze(-1)
+        beta = beta.unsqueeze(-1).unsqueeze(-1)
+        return feature_map * (1 + gamma) + beta
