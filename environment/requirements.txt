@@ -8,3 +8,4 @@ pillow>=10.0
 tqdm>=4.66
 scipy>=1.11
 filelock>=3.13
+torch>=2.0
