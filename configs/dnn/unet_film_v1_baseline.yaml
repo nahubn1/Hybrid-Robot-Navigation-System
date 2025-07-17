@@ -1,0 +1,43 @@
+# Configuration for baseline training of UNet-FiLM model
+
+# Experiment identifiers and reproducibility
+run_name: unet_film_v1_baseline  # Unique name for this run
+seed: 42                         # Global random seed
+
+# Dataset locations and split ratios
+# Paths are relative to the project root
+# Directory with .npz training sample files
+samples_dir: data/training_samples
+# Directory containing corresponding ground truth heatmaps
+ground_truth_dir: data/ground_truth
+# Fraction of pairs used for validation
+val_split: 0.1
+
+# Output directories for checkpoints and TensorBoard logs
+checkpoints_dir: results/checkpoints/unet_film_v1_baseline
+log_dir: results/logs/unet_film_v1_baseline
+
+# Training parameters
+device: cuda           # Training device: 'cpu' or 'cuda'
+epochs: 50             # Total number of epochs to train
+batch_size: 8          # Samples per batch
+num_workers: 4         # DataLoader worker processes
+use_amp: true          # Mixed precision training
+early_stop_patience: 10  # Stop if no improvement after this many epochs
+
+# Optimizer configuration
+optimizer:
+  name: AdamW          # Optimizer type
+  lr: 0.001            # Learning rate
+  weight_decay: 0.0001 # Weight decay factor
+
+# Learning rate scheduler settings
+scheduler:
+  name: CosineAnnealing  # Scheduler type
+  warmup_epochs: 5       # Linear warmup epochs before scheduling
+
+# Loss function weighting
+loss:
+  dice_weight: 0.5    # Contribution of Dice loss
+  focal_weight: 0.5   # Contribution of Focal loss
+  focal_gamma: 2.0    # Focusing parameter for Focal loss
