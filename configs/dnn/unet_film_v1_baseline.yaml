@@ -7,9 +7,9 @@ seed: 42                         # Global random seed
 # Dataset locations and split ratios
 # Paths are relative to the project root
 # Directory with .npz training sample files
-samples_dir: data/training_data
+samples_dir: Thesis_DNN_Planner/data/training_data
 # Directory containing corresponding ground truth heatmaps
-ground_truth_dir: data/ground_truth
+ground_truth_dir: Thesis_DNN_Planner/data/ground_truth
 # Fraction of pairs used for validation
 val_split: 0.1
 
