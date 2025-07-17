@@ -2,28 +2,34 @@ from __future__ import annotations
 
 from torch import nn
 
+from .config import UNetConfig
 from .modules import DoubleConv, EncoderBlock, DecoderBlock, FiLMLayer
 
 
 class UNetFiLM(nn.Module):
     """Full U-Net model with FiLM modulation at the bottleneck."""
 
-    def __init__(self) -> None:
+    def __init__(self, cfg: UNetConfig | None = None) -> None:
         super().__init__()
+        self.cfg = cfg or UNetConfig()
+        c = self.cfg
         # Encoder layers
-        self.encoder0 = DoubleConv(4, 32)
-        self.encoder1 = EncoderBlock(32, 64)
-        self.encoder2 = EncoderBlock(64, 128)
+        self.encoder0 = DoubleConv(c.in_channels, c.enc_channels[0])
+        self.encoder1 = EncoderBlock(c.enc_channels[0], c.enc_channels[1])
+        self.encoder2 = EncoderBlock(c.enc_channels[1], c.enc_channels[2])
         # Bottleneck max pooling then DoubleConv and FiLM conditioning
         self.pool = nn.MaxPool2d(2, 2)
-        self.bottleneck = DoubleConv(128, 256)
-        self.bottleneck_film = FiLMLayer(robot_param_dim=2, feature_map_channels=256)
+        self.bottleneck = DoubleConv(c.enc_channels[2], c.bottleneck_channels)
+        self.bottleneck_film = FiLMLayer(
+            robot_param_dim=c.robot_param_dim,
+            feature_map_channels=c.bottleneck_channels,
+        )
         # Decoder layers
-        self.decoder2 = DecoderBlock(256, 128)
-        self.decoder1 = DecoderBlock(128, 64)
-        self.decoder0 = DecoderBlock(64, 32)
+        self.decoder2 = DecoderBlock(c.bottleneck_channels, c.dec_channels[0])
+        self.decoder1 = DecoderBlock(c.dec_channels[0], c.dec_channels[1])
+        self.decoder0 = DecoderBlock(c.dec_channels[1], c.dec_channels[2])
         # Final output convolution
-        self.head = nn.Conv2d(32, 1, kernel_size=1)
+        self.head = nn.Conv2d(c.dec_channels[2], c.out_channels, kernel_size=1)
 
     def forward(self, grid_tensor, robot_tensor):
         """Forward pass through the network.
@@ -53,3 +59,4 @@ class UNetFiLM(nn.Module):
         # 1x1 convolution head producing raw logits
         logits = self.head(d0)
         return logits
+
