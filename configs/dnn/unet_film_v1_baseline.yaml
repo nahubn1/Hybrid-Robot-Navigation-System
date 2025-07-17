@@ -7,7 +7,7 @@ seed: 42                         # Global random seed
 # Dataset locations and split ratios
 # Paths are relative to the project root
 # Directory with .npz training sample files
-samples_dir: data/training_samples
+samples_dir: data/training_data
 # Directory containing corresponding ground truth heatmaps
 ground_truth_dir: data/ground_truth
 # Fraction of pairs used for validation
