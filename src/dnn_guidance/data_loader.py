@@ -65,11 +65,11 @@ class PathfindingDataset(Dataset):
 
         if self.augment:
             if random.random() < 0.5:
-                grid = np.fliplr(grid)
-                heatmap = np.fliplr(heatmap)
+                grid = np.fliplr(grid).copy()
+                heatmap = np.fliplr(heatmap).copy()
             if random.random() < 0.5:
-                grid = np.flipud(grid)
-                heatmap = np.flipud(heatmap)
+                grid = np.flipud(grid).copy()
+                heatmap = np.flipud(heatmap).copy()
 
         start = (grid == 8).astype(np.float32)
         goal = (grid == 9).astype(np.float32)
@@ -80,6 +80,6 @@ class PathfindingDataset(Dataset):
         cl_scaled, step_scaled = self.scaling.scale(clearance, step_size)
         robot_tensor = torch.tensor([cl_scaled, step_scaled], dtype=torch.float32)
 
-        heatmap_tensor = torch.from_numpy(heatmap[None, ...])
+        heatmap_tensor = torch.from_numpy(np.ascontiguousarray(heatmap[None, ...]))
 
         return (grid_tensor.float(), robot_tensor), heatmap_tensor.float()
