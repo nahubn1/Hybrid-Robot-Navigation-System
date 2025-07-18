@@ -62,3 +62,19 @@ running. Set `save_filtered_prm: false` to skip writing the filtered
 roadmap cache. Ground truth visualization parameters are read from
 `configs/data_generation/visualize_ground_truth.yaml`, which also
 controls whether the cached PRM overlay is shown.
+
+## Faster Data Loading in Colab
+
+When using Google Colab, reading large datasets directly from Drive can be slow.
+Copy the data to the virtual machine's SSD once at the beginning of the session
+and load from this local copy for the rest of the run:
+
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+
+!rsync -ah --progress /content/drive/MyDrive/path/to/dataset/ /content/dataset/
+```
+
+Update your configuration so the data loader reads from `/content/dataset`.
+Subsequent data access will be considerably faster.
