@@ -73,7 +73,10 @@ and load from this local copy for the rest of the run:
 from google.colab import drive
 drive.mount('/content/drive')
 
-!rsync -ah --progress /content/drive/MyDrive/path/to/dataset/ /content/dataset/
+
+!rsync -ah --info=progress2 /content/drive/MyDrive/path/to/dataset/ /content/dataset/
+!ls /content/dataset | head
+
 ```
 
 Update your configuration so the data loader reads from `/content/dataset`.
