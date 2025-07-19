@@ -21,7 +21,7 @@ log_dir: logs/unet_film_v1_baseline
 device: cuda           # Training device: 'cpu' or 'cuda'
 epochs: 50             # Total number of epochs to train
 batch_size: 8          # Samples per batch
-num_workers: 2         # DataLoader worker processes
+num_workers: 8         # DataLoader worker processes
 use_amp: true          # Mixed precision training
 early_stop_patience: 10  # Stop if no improvement after this many epochs
 
