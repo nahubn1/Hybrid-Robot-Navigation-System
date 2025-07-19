@@ -18,8 +18,8 @@ log_dir: results/logs/unet_film_v3_lower_lr            # Updated: Separate log f
 # -- Training parameters --
 device: cuda
 epochs: 50
-batch_size: 12
-num_workers: 2
+batch_size: 8
+num_workers: 12
 use_amp: true
 early_stop_patience: 10
 
