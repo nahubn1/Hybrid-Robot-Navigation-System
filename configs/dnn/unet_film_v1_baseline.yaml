@@ -14,8 +14,8 @@ ground_truth_dir: ground_truth
 val_split: 0.1
 
 # Output directories for checkpoints and TensorBoard logs
-checkpoints_dir: results/checkpoints/unet_film_v1_baseline
-log_dir: results/logs/unet_film_v1_baseline
+checkpoints_dir: checkpoints/unet_film_v1_baseline
+log_dir: logs/unet_film_v1_baseline
 
 # Training parameters
 device: cuda           # Training device: 'cpu' or 'cuda'
