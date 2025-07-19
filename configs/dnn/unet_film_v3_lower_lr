@@ -1,0 +1,43 @@
+# ===================================================================
+# Training Configuration for U-Net+FiLM Oracle - V3 Lower Learning Rate
+# ===================================================================
+
+# -- Experiment identifiers and reproducibility --
+run_name: unet_film_v3_lower_lr  # Updated: Name for this specific run
+seed: 42                         # Kept constant for fair comparison
+
+# -- Dataset locations and split ratios --
+samples_dir: training_data
+ground_truth_dir: ground_truth
+val_split: 0.1
+
+# -- Output directories for checkpoints and TensorBoard logs --
+checkpoints_dir: results/checkpoints/unet_film_v3_lower_lr # Updated: Separate output folder
+log_dir: results/logs/unet_film_v3_lower_lr            # Updated: Separate log folder
+
+# -- Training parameters --
+device: cuda
+epochs: 50
+batch_size: 12
+num_workers: 2
+use_amp: true
+early_stop_patience: 10
+
+# -- Optimizer configuration --
+# CHANGED: Using a more conservative learning rate for finer adjustments.
+optimizer:
+  name: AdamW
+  lr: 0.0003            # Decreased from 0.001
+  weight_decay: 0.0001
+
+# -- Learning rate scheduler settings --
+scheduler:
+  name: CosineAnnealing
+  warmup_epochs: 5
+
+# -- Loss function weighting --
+# Reverted to baseline to isolate the effect of the LR change.
+loss:
+  dice_weight: 0.5
+  focal_weight: 0.5
+  focal_gamma: 2.0
