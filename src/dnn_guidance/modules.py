@@ -94,3 +94,54 @@ class FiLMLayer(nn.Module):
         gamma = gamma.unsqueeze(-1).unsqueeze(-1)
         beta = beta.unsqueeze(-1).unsqueeze(-1)
         return feature_map * (1 + gamma) + beta
+
+
+class FiLM(nn.Module):
+    """FiLM conditioning module used in HR-FiLM-Net."""
+
+    def __init__(self, cond_dim: int = 2, feat_dim: int = 64) -> None:
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(cond_dim, 64),
+            nn.ReLU(inplace=True),
+            nn.Linear(64, feat_dim * 2),
+        )
+
+    def forward(self, cond: torch.Tensor, feat: torch.Tensor) -> torch.Tensor:
+        gamma, beta = self.mlp(cond).chunk(2, dim=1)
+        gamma = gamma[:, :, None, None]
+        beta = beta[:, :, None, None]
+        return feat * (1 + gamma) + beta
+
+
+class ResidualBlock(nn.Module):
+    """Simple residual block with two 3x3 convolutions."""
+
+    def __init__(self, channels: int, *, dilation: int = 1) -> None:
+        super().__init__()
+        padding = dilation
+        self.conv1 = nn.Conv2d(
+            channels, channels, kernel_size=3, padding=padding, dilation=dilation, bias=False
+        )
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(
+            channels, channels, kernel_size=3, padding=padding, dilation=dilation, bias=False
+        )
+        self.bn2 = nn.BatchNorm2d(channels)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover - simple
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out += x
+        return self.relu(out)
+
+
+class DilatedResidualBlock(ResidualBlock):
+    """Residual block with configurable dilation."""
+
+    def __init__(self, channels: int, *, dilation: int) -> None:
+        super().__init__(channels, dilation=dilation)

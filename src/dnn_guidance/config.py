@@ -31,3 +31,23 @@ class UNetConfig:
             dec_channels=tuple(data.get("dec_channels", cls.dec_channels)),
             out_channels=int(data.get("out_channels", cls.out_channels)),
         )
+
+
+@dataclass
+class HRFiLMConfig:
+    """Configuration for :class:`HRFiLMNet`."""
+
+    in_channels: int = 4
+    robot_param_dim: int = 2
+    stage_channels: Tuple[int, int, int, int] = (32, 64, 128, 256)
+    out_channels: int = 1
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> "HRFiLMConfig":
+        data = yaml.safe_load(Path(path).read_text())
+        return cls(
+            in_channels=int(data.get("in_channels", cls.in_channels)),
+            robot_param_dim=int(data.get("robot_param_dim", cls.robot_param_dim)),
+            stage_channels=tuple(data.get("stage_channels", cls.stage_channels)),
+            out_channels=int(data.get("out_channels", cls.out_channels)),
+        )
