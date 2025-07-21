@@ -201,7 +201,7 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
     if name in {"hr_film_net", "hrfilmnet"}:
         cfg = HRFiLMConfig.from_yaml(cfg_path) if cfg_path else HRFiLMConfig()
         return HRFiLMNet(cfg)
-    if name in {"diffusion_unet", "heatmap_diffusion"}:
+    if name in {"diffusion_unet", "heatmap_diffusion", "diffusion_unet"}:
         cfg = (
             DiffusionUNetConfig.from_yaml(cfg_path)
             if cfg_path
