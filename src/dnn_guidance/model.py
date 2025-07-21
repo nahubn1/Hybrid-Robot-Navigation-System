@@ -4,7 +4,7 @@ from pathlib import Path
 from torch import nn
 import torch
 
-__all__ = ["UNetFiLM", "HRFiLMNet", "diffusion_unet", "create_model"]
+__all__ = ["UNetFiLM", "HRFiLMNet", "ConditionalDenoisingUNet", "create_model"]
 
 from .config import UNetConfig, HRFiLMConfig, DiffusionUNetConfig
 from .modules import (
@@ -194,7 +194,9 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
         Instantiated model ready for training or inference.
     """
 
-    name = name.lower()
+    # Normalize the provided model identifier to avoid issues with leading or
+    # trailing whitespace or letter casing differences.
+    name = name.strip().lower()
     print(name)
     if name == "unet_film":
         cfg = UNetConfig.from_yaml(cfg_path) if cfg_path else UNetConfig()
