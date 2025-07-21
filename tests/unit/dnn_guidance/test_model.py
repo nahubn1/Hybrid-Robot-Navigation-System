@@ -86,6 +86,7 @@ def test_resnet_fpn_film_forward_and_config(tmp_path):
     grid = torch.randn(B, cfg.in_channels, 200, 200)
     robot = torch.randn(B, cfg.robot_param_dim)
     out = model(grid, robot)
+    assert not any(isinstance(m, torch.nn.Sigmoid) for m in model.head.modules())
     assert out.shape == (B, cfg.out_channels, 200, 200)
 
 
