@@ -4,7 +4,7 @@ from pathlib import Path
 from torch import nn
 import torch
 
-__all__ = ["UNetFiLM", "HRFiLMNet", "ConditionalDenoisingUNet", "create_model"]
+__all__ = ["UNetFiLM", "HRFiLMNet", "diffusion_unet", "create_model"]
 
 from .config import UNetConfig, HRFiLMConfig, DiffusionUNetConfig
 from .modules import (
