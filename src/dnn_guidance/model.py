@@ -198,7 +198,6 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
     # trailing whitespace or letter casing differences.
     name = name.strip().lower()
     if name == "unet_film":
-        print(name)
         cfg = UNetConfig.from_yaml(cfg_path) if cfg_path else UNetConfig()
         return UNetFiLM(cfg)
     if name in {"hr_film_net", "hrfilmnet"}:
