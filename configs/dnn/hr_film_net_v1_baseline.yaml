@@ -1,0 +1,41 @@
+# Configuration for baseline training of HR-FiLM-Net model
+
+# Experiment identifiers and reproducibility
+run_name: hr_film_net_v1_baseline
+seed: 42
+model_name: hr_film_net
+
+# Dataset locations and split ratios
+samples_dir: training_data
+ground_truth_dir: ground_truth
+val_split: 0.1
+
+# Output directories for checkpoints and TensorBoard logs
+checkpoints_dir: checkpoints/hr_film_net_v1_baseline
+log_dir: logs/hr_film_net_v1_baseline
+
+# Training parameters
+device: cuda
+epochs: 30
+batch_size: 32
+num_workers: 12
+use_amp: true
+early_stop_patience: 10
+
+# Optimizer configuration
+optimizer:
+  name: AdamW
+  lr: 0.0003
+  weight_decay: 0.01
+  fused: true
+
+# Learning rate scheduler settings
+scheduler:
+  name: CosineAnnealing
+  warmup_epochs: 2
+
+# Loss function weighting
+loss:
+  dice_weight: 0.5
+  focal_weight: 0.5
+  focal_gamma: 2.0

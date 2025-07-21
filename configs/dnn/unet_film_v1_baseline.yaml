@@ -3,6 +3,7 @@
 # Experiment identifiers and reproducibility
 run_name: unet_film_v1_baseline  # Unique name for this run
 seed: 42                         # Global random seed
+model_name: unet_film            # Set to 'hr_film_net' to train HR-FiLM-Net
 
 # Dataset locations and split ratios
 # Paths are relative to the project root
