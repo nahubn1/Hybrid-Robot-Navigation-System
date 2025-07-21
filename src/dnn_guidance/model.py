@@ -218,5 +218,5 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
             bottleneck_channels=cfg.bottleneck_channels,
             dec_channels=cfg.dec_channels,
         )
-    raise ValueError(f"Unknown model '{name}'")
+    raise ValueError(f"Unknown model ->>'{name}'")
 
