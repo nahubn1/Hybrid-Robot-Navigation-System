@@ -6,7 +6,8 @@ import torch
 SRC_PATH = Path(__file__).resolve().parents[3] / "src"
 sys.path.append(str(SRC_PATH))
 
-from dnn_guidance.loss import DiceFocalLoss
+from dnn_guidance.loss import DiceFocalLoss, SoftDiceLoss
+from dnn_guidance.trainer import dice_score
 
 
 def test_dice_focal_loss_computation():
@@ -22,3 +23,15 @@ def test_dice_focal_loss_computation():
     loss_wrong = loss_fn(logits_wrong, targets)
     assert loss_wrong.ndim == 0
     assert loss_wrong.item() > 0.0
+
+
+def test_dice_score_matches_soft_dice_loss():
+    B, C, H, W = 2, 1, 8, 8
+    logits = torch.randn(B, C, H, W)
+    targets = torch.rand(B, C, H, W)
+
+    loss_fn = SoftDiceLoss()
+    expected = 1 - loss_fn(logits, targets)
+    result = dice_score(logits, targets)
+
+    assert torch.isclose(result, expected, atol=1e-6)

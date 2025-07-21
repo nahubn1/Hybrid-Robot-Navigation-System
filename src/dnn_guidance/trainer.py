@@ -13,8 +13,12 @@ from tqdm import tqdm
 __all__ = ["dice_score", "train_one_epoch", "validate_one_epoch"]
 
 
-def dice_score(logits: torch.Tensor, targets: torch.Tensor, *, threshold: float = 0.5, eps: float = 1e-6) -> torch.Tensor:
+def dice_score(logits: torch.Tensor, targets: torch.Tensor, *, eps: float = 1e-6) -> torch.Tensor:
     """Compute the Dice coefficient for binary segmentation.
+
+    The score is calculated directly on the probabilistic outputs from
+    ``torch.sigmoid(logits)`` and the (possibly continuous) target heatmaps
+    without thresholding to binary values.
 
     Parameters
     ----------
@@ -22,9 +26,6 @@ def dice_score(logits: torch.Tensor, targets: torch.Tensor, *, threshold: float 
         Raw model outputs of shape ``[B, 1, H, W]``.
     targets : torch.Tensor
         Binary ground truth masks with the same shape as ``logits``.
-    threshold : float, optional
-        Probability threshold to convert predictions to binary values. Defaults
-        to ``0.5``.
     eps : float, optional
         Small constant for numerical stability. Defaults to ``1e-6``.
 
@@ -34,12 +35,11 @@ def dice_score(logits: torch.Tensor, targets: torch.Tensor, *, threshold: float 
         Dice score averaged over the batch.
     """
     probs = torch.sigmoid(logits)
-    preds = (probs > threshold).float()
     targets = targets.float()
-    dims = tuple(range(1, preds.ndim))
-    intersection = torch.sum(preds * targets, dim=dims)
-    union = torch.sum(preds, dim=dims) + torch.sum(targets, dim=dims)
-    dice = (2 * intersection + eps) / (union + eps)
+    dims = tuple(range(1, probs.ndim))
+    intersection = torch.sum(probs * targets, dim=dims)
+    cardinality = torch.sum(probs + targets, dim=dims)
+    dice = (2 * intersection + eps) / (cardinality + eps)
     return dice.mean()
 
 
