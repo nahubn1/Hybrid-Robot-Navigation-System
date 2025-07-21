@@ -195,6 +195,7 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
     """
 
     name = name.lower()
+    print(name)
     if name == "unet_film":
         cfg = UNetConfig.from_yaml(cfg_path) if cfg_path else UNetConfig()
         return UNetFiLM(cfg)
