@@ -74,6 +74,26 @@ class DiffusionUNetConfig:
             robot_param_dim=int(data.get("robot_param_dim", cls.robot_param_dim)),
             time_dim=int(data.get("time_dim", cls.time_dim)),
             enc_channels=tuple(data.get("enc_channels", cls.enc_channels)),
-            bottleneck_channels=int(data.get("bottleneck_channels", cls.bottleneck_channels)),
+            bottleneck_channels=int(
+                data.get("bottleneck_channels", cls.bottleneck_channels)
+            ),
             dec_channels=tuple(data.get("dec_channels", cls.dec_channels)),
+        )
+
+
+@dataclass
+class ResNetFPNFiLMConfig:
+    """Configuration for :class:`ResNetFPNFiLM`."""
+
+    in_channels: int = 4
+    robot_param_dim: int = 2
+    out_channels: int = 1
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> "ResNetFPNFiLMConfig":
+        data = yaml.safe_load(Path(path).read_text())
+        return cls(
+            in_channels=int(data.get("in_channels", cls.in_channels)),
+            robot_param_dim=int(data.get("robot_param_dim", cls.robot_param_dim)),
+            out_channels=int(data.get("out_channels", cls.out_channels)),
         )

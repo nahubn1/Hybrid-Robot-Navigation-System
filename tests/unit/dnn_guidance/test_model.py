@@ -1,13 +1,23 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import torch
 
-SRC_PATH = Path(__file__).resolve().parents[3] / 'src'
+SRC_PATH = Path(__file__).resolve().parents[3] / "src"
 sys.path.append(str(SRC_PATH))
 
-from dnn_guidance.model import UNetFiLM, HRFiLMNet, ConditionalDenoisingUNet
-from dnn_guidance.config import UNetConfig, HRFiLMConfig, DiffusionUNetConfig
+from dnn_guidance.config import (
+    DiffusionUNetConfig,
+    HRFiLMConfig,
+    ResNetFPNFiLMConfig,
+    UNetConfig,
+)
+from dnn_guidance.model import (
+    ConditionalDenoisingUNet,
+    HRFiLMNet,
+    ResNetFPNFiLM,
+    UNetFiLM,
+)
 
 
 def test_unet_film_forward_pass():
@@ -66,6 +76,19 @@ def test_hrfilm_config_loading(tmp_path):
     assert out.shape == (1, cfg.out_channels, 200, 200)
 
 
+def test_resnet_fpn_film_forward_and_config(tmp_path):
+    cfg_text = "in_channels: 4\n" "robot_param_dim: 2\n" "out_channels: 1\n"
+    path = tmp_path / "rff_cfg.yaml"
+    path.write_text(cfg_text)
+    cfg = ResNetFPNFiLMConfig.from_yaml(path)
+    model = ResNetFPNFiLM(cfg)
+    B = 2
+    grid = torch.randn(B, cfg.in_channels, 200, 200)
+    robot = torch.randn(B, cfg.robot_param_dim)
+    out = model(grid, robot)
+    assert out.shape == (B, cfg.out_channels, 200, 200)
+
+
 def test_diffusion_unet_forward_and_config(tmp_path):
     cfg_text = (
         "in_channels: 1\n"
@@ -95,5 +118,3 @@ def test_diffusion_unet_forward_and_config(tmp_path):
     robot = torch.randn(B, cfg.robot_param_dim)
     out = model(noisy, t, grid, robot)
     assert out.shape == (B, 1, 200, 200)
-
-
