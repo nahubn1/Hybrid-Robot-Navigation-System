@@ -6,8 +6,8 @@ import torch
 SRC_PATH = Path(__file__).resolve().parents[3] / 'src'
 sys.path.append(str(SRC_PATH))
 
-from dnn_guidance.model import UNetFiLM, HRFiLMNet
-from dnn_guidance.config import UNetConfig, HRFiLMConfig
+from dnn_guidance.model import UNetFiLM, HRFiLMNet, ConditionalDenoisingUNet
+from dnn_guidance.config import UNetConfig, HRFiLMConfig, DiffusionUNetConfig
 
 
 def test_unet_film_forward_pass():
@@ -64,4 +64,36 @@ def test_hrfilm_config_loading(tmp_path):
     robot = torch.randn(1, cfg.robot_param_dim)
     out = model(grid, robot)
     assert out.shape == (1, cfg.out_channels, 200, 200)
+
+
+def test_diffusion_unet_forward_and_config(tmp_path):
+    cfg_text = (
+        "in_channels: 1\n"
+        "grid_channels: 4\n"
+        "robot_param_dim: 2\n"
+        "time_dim: 16\n"
+        "enc_channels: [8, 16, 32]\n"
+        "bottleneck_channels: 64\n"
+        "dec_channels: [32, 16, 8]\n"
+    )
+    path = tmp_path / "diff_cfg.yaml"
+    path.write_text(cfg_text)
+    cfg = DiffusionUNetConfig.from_yaml(path)
+    model = ConditionalDenoisingUNet(
+        in_channels=cfg.in_channels,
+        grid_channels=cfg.grid_channels,
+        robot_param_dim=cfg.robot_param_dim,
+        time_dim=cfg.time_dim,
+        enc_channels=cfg.enc_channels,
+        bottleneck_channels=cfg.bottleneck_channels,
+        dec_channels=cfg.dec_channels,
+    )
+    B = 2
+    noisy = torch.randn(B, cfg.in_channels, 200, 200)
+    t = torch.randint(0, 10, (B,))
+    grid = torch.randn(B, cfg.grid_channels, 200, 200)
+    robot = torch.randn(B, cfg.robot_param_dim)
+    out = model(noisy, t, grid, robot)
+    assert out.shape == (B, 1, 200, 200)
+
 

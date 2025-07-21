@@ -145,3 +145,17 @@ class DilatedResidualBlock(ResidualBlock):
 
     def __init__(self, channels: int, *, dilation: int) -> None:
         super().__init__(channels, dilation=dilation)
+
+
+class DecoderBlockWithGrid(nn.Module):
+    """Decoder block that concatenates skip and grid features."""
+
+    def __init__(self, in_ch: int, skip_ch: int, grid_ch: int, out_ch: int) -> None:
+        super().__init__()
+        self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
+        self.conv = DoubleConv(in_ch + skip_ch + grid_ch, out_ch)
+
+    def forward(self, x: torch.Tensor, skip: torch.Tensor, grid: torch.Tensor) -> torch.Tensor:
+        x = self.up(x)
+        x = torch.cat([x, skip, grid], dim=1)
+        return self.conv(x)
