@@ -4,7 +4,13 @@ from pathlib import Path
 from torch import nn
 import torch
 
-__all__ = ["UNetFiLM", "HRFiLMNet", "diffusion_unet", "create_model"]
+__all__ = [
+    "UNetFiLM",
+    "HRFiLMNet",
+    "ConditionalDenoisingUNet",
+    "diffusion_unet",
+    "create_model",
+]
 
 from .config import UNetConfig, HRFiLMConfig, DiffusionUNetConfig
 from .modules import (
@@ -18,6 +24,9 @@ from .modules import (
     DilatedResidualBlock,
 )
 from .diffusion import ConditionalDenoisingUNet
+
+# Backwards compatible alias used by older code and configuration files
+diffusion_unet = ConditionalDenoisingUNet
 
 
 class UNetFiLM(nn.Module):
@@ -194,8 +203,9 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
         Instantiated model ready for training or inference.
     """
 
-    name = name.lower()
-    print(name)
+    # Normalize the provided model identifier to avoid issues with leading or
+    # trailing whitespace or letter casing differences.
+    name = name.strip().lower()
     if name == "unet_film":
         cfg = UNetConfig.from_yaml(cfg_path) if cfg_path else UNetConfig()
         return UNetFiLM(cfg)
