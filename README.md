@@ -62,3 +62,22 @@ running. Set `save_filtered_prm: false` to skip writing the filtered
 roadmap cache. Ground truth visualization parameters are read from
 `configs/data_generation/visualize_ground_truth.yaml`, which also
 controls whether the cached PRM overlay is shown.
+
+## Training
+
+The `scripts/model_training/train.py` script provides a simple command-line interface for training segmentation models. It reads a YAML configuration describing the dataset location, optimizer and scheduler settings. The desired architecture can be selected with the `--model` flag:
+
+```bash
+# Train the default U-Net+FiLM model
+python scripts/model_training/train.py configs/dnn/unet_film_v1_baseline.yaml --model unet_film
+
+# Train the high-resolution HR-FiLM-Net
+python scripts/model_training/train.py configs/dnn/hr_film_net_v1_baseline.yaml --model hr_film_net
+```
+
+Model checkpoints are written to the directory specified by `checkpoints_dir` in the training config.
+
+The notebook under `notebooks/model_prototyping` loads the same YAML
+training file (e.g., `configs/dnn/hr_film_net_v1_baseline.yaml`). Add
+`model_name: hr_film_net` to that config to train HR-FiLM-Net from the
+notebook.

@@ -1,9 +1,21 @@
 from __future__ import annotations
 
+from pathlib import Path
 from torch import nn
+import torch
 
-from .config import UNetConfig
-from .modules import DoubleConv, EncoderBlock, DecoderBlock, FiLMLayer
+__all__ = ["UNetFiLM", "HRFiLMNet", "create_model"]
+
+from .config import UNetConfig, HRFiLMConfig
+from .modules import (
+    DoubleConv,
+    EncoderBlock,
+    DecoderBlock,
+    FiLMLayer,
+    FiLM,
+    ResidualBlock,
+    DilatedResidualBlock,
+)
 
 
 class UNetFiLM(nn.Module):
@@ -59,4 +71,133 @@ class UNetFiLM(nn.Module):
         # 1x1 convolution head producing raw logits
         logits = self.head(d0)
         return logits
+
+
+class HRFiLMNet(nn.Module):
+    """High-resolution network with FiLM conditioning."""
+
+    def __init__(self, cfg: HRFiLMConfig | None = None) -> None:
+        super().__init__()
+        self.cfg = cfg or HRFiLMConfig()
+        c = self.cfg
+
+        # Stem
+        self.stem = nn.Sequential(
+            nn.Conv2d(c.in_channels, 32, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+        )
+
+        self.stage1 = nn.Sequential(*[ResidualBlock(32) for _ in range(4)])
+
+        self.down2 = self._make_downsample(c.stage_channels[0], c.stage_channels[1])
+        self.down3 = self._make_downsample(c.stage_channels[1], c.stage_channels[2])
+        self.down4 = self._make_downsample(c.stage_channels[2], c.stage_channels[3])
+
+        self.res2_b0 = ResidualBlock(c.stage_channels[0])
+        self.res2_b1 = ResidualBlock(c.stage_channels[1])
+        self.res3_b0 = ResidualBlock(c.stage_channels[0])
+        self.res3_b1 = ResidualBlock(c.stage_channels[1])
+        self.res3_b2 = ResidualBlock(c.stage_channels[2])
+        self.res4_b0 = ResidualBlock(c.stage_channels[0])
+        self.res4_b1 = ResidualBlock(c.stage_channels[1])
+        self.res4_b2 = ResidualBlock(c.stage_channels[2])
+        self.res4_b3 = ResidualBlock(c.stage_channels[3])
+
+        # FiLM modules for stage3 and stage4
+        self.film1 = FiLM(cond_dim=c.robot_param_dim, feat_dim=c.stage_channels[1])
+        self.film2 = FiLM(cond_dim=c.robot_param_dim, feat_dim=c.stage_channels[0])
+
+        # Context blocks after HR backbone
+        self.context = nn.Sequential(
+            DilatedResidualBlock(256, dilation=2),
+            DilatedResidualBlock(256, dilation=4),
+        )
+
+        self.conv_fuse = nn.Conv2d(sum(c.stage_channels), 256, kernel_size=1)
+        self.conv_head = nn.Sequential(
+            nn.Conv2d(256, 64, kernel_size=1),
+            nn.PixelShuffle(2),  # 64 -> 16 channels, 200 -> 400
+            nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16),
+            nn.Conv2d(16, c.out_channels, kernel_size=1),
+        )
+
+    def _make_downsample(self, in_ch: int, out_ch: int) -> nn.Sequential:
+        return nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, grid_tensor, robot_tensor):
+        c = self.cfg
+        # Stem and Stage1
+        x = self.stem(grid_tensor)
+        b0 = self.stage1(x)
+
+        # Stage2
+        b1 = self.down2(b0)
+        b0 = self.res2_b0(b0)
+        b1 = self.res2_b1(b1)
+
+        # Stage3 with FiLM on branch1
+        b1 = self.film1(robot_tensor, b1)
+        b2 = self.down3(b1)
+        b0 = self.res3_b0(b0)
+        b1 = self.res3_b1(b1)
+        b2 = self.res3_b2(b2)
+
+        # Stage4 with FiLM on branch0
+        b0 = self.film2(robot_tensor, b0)
+        b3 = self.down4(b2)
+        b0 = self.res4_b0(b0)
+        b1 = self.res4_b1(b1)
+        b2 = self.res4_b2(b2)
+        b3 = self.res4_b3(b3)
+
+        # Upsample all branches to highest resolution
+        up1 = nn.functional.interpolate(b1, scale_factor=2, mode="bilinear", align_corners=False)
+        up2 = nn.functional.interpolate(b2, scale_factor=4, mode="bilinear", align_corners=False)
+        up3 = nn.functional.interpolate(b3, scale_factor=8, mode="bilinear", align_corners=False)
+        feats = torch.cat([b0, up1, up2, up3], dim=1)
+
+        feats = self.conv_fuse(feats)
+        feats = self.context(feats)
+        logits = self.conv_head(feats)
+
+        # Center crop back to 200x200
+        if logits.size(-1) > 200:
+            crop = (logits.size(-1) - 200) // 2
+            logits = logits[:, :, crop:-crop, crop:-crop]
+        return logits
+
+
+def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
+    """Factory to instantiate navigation models by name.
+
+    Parameters
+    ----------
+    name : str
+        Identifier of the model architecture. Supported values are
+        ``"unet_film"`` and ``"hr_film_net"``.
+    cfg_path : str | Path, optional
+        Optional YAML file with model hyper-parameters.
+
+    Returns
+    -------
+    nn.Module
+        Instantiated model ready for training or inference.
+    """
+
+    name = name.lower()
+    if name == "unet_film":
+        cfg = UNetConfig.from_yaml(cfg_path) if cfg_path else UNetConfig()
+        return UNetFiLM(cfg)
+    if name in {"hr_film_net", "hrfilmnet"}:
+        cfg = HRFiLMConfig.from_yaml(cfg_path) if cfg_path else HRFiLMConfig()
+        return HRFiLMNet(cfg)
+    raise ValueError(f"Unknown model '{name}'")
 
