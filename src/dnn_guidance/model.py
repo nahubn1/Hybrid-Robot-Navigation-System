@@ -4,18 +4,20 @@ from pathlib import Path
 from torch import nn
 import torch
 
-__all__ = ["UNetFiLM", "HRFiLMNet", "create_model"]
+__all__ = ["UNetFiLM", "HRFiLMNet", "ConditionalDenoisingUNet", "create_model"]
 
-from .config import UNetConfig, HRFiLMConfig
+from .config import UNetConfig, HRFiLMConfig, DiffusionUNetConfig
 from .modules import (
     DoubleConv,
     EncoderBlock,
     DecoderBlock,
+    DecoderBlockWithGrid,
     FiLMLayer,
     FiLM,
     ResidualBlock,
     DilatedResidualBlock,
 )
+from .diffusion import ConditionalDenoisingUNet
 
 
 class UNetFiLM(nn.Module):
@@ -182,7 +184,7 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
     ----------
     name : str
         Identifier of the model architecture. Supported values are
-        ``"unet_film"`` and ``"hr_film_net"``.
+        ``"unet_film"``, ``"hr_film_net`` and ``"diffusion_unet"``.
     cfg_path : str | Path, optional
         Optional YAML file with model hyper-parameters.
 
@@ -199,5 +201,20 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
     if name in {"hr_film_net", "hrfilmnet"}:
         cfg = HRFiLMConfig.from_yaml(cfg_path) if cfg_path else HRFiLMConfig()
         return HRFiLMNet(cfg)
+    if name in {"diffusion_unet", "heatmap_diffusion"}:
+        cfg = (
+            DiffusionUNetConfig.from_yaml(cfg_path)
+            if cfg_path
+            else DiffusionUNetConfig()
+        )
+        return ConditionalDenoisingUNet(
+            in_channels=cfg.in_channels,
+            grid_channels=cfg.grid_channels,
+            robot_param_dim=cfg.robot_param_dim,
+            time_dim=cfg.time_dim,
+            enc_channels=cfg.enc_channels,
+            bottleneck_channels=cfg.bottleneck_channels,
+            dec_channels=cfg.dec_channels,
+        )
     raise ValueError(f"Unknown model '{name}'")
 
