@@ -249,7 +249,6 @@ class ResNetFPNFiLM(nn.Module):
             nn.PixelShuffle(2),
             nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16),
             nn.Conv2d(16, c.out_channels, kernel_size=1),
-            nn.Sigmoid(),
         )
 
     def forward(self, grid_tensor, robot_tensor):
