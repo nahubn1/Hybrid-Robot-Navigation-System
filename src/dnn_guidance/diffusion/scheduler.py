@@ -6,9 +6,16 @@ import torch
 class NoiseScheduler:
     """Linear beta schedule for DDPM training and sampling."""
 
-    def __init__(self, beta_start: float = 1e-4, beta_end: float = 0.02, timesteps: int = 1000) -> None:
+    def __init__(
+        self,
+        beta_start: float = 1e-4,
+        beta_end: float = 0.02,
+        timesteps: int = 1000,
+        device: torch.device | str = "cpu",
+    ) -> None:
         self.timesteps = timesteps
-        self.betas = torch.linspace(beta_start, beta_end, timesteps)
+        self.device = device
+        self.betas = torch.linspace(beta_start, beta_end, timesteps, device=self.device)
         self.alphas = 1.0 - self.betas
         self.alpha_bars = torch.cumprod(self.alphas, dim=0)
 

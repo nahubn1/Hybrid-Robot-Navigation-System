@@ -66,7 +66,7 @@ def train_one_epoch(
     epoch_loss = 0.0
     num_samples = 0
     is_diffusion = isinstance(model, ConditionalDenoisingUNet)
-    scheduler = NoiseScheduler() if is_diffusion else None
+    scheduler = NoiseScheduler(device=device) if is_diffusion else None
 
     for (grid, robot), targets in tqdm(loader, desc="Train", leave=False):
         grid = grid.to(device)
@@ -112,7 +112,7 @@ def validate_one_epoch(
     val_dice = 0.0
     num_samples = 0
     is_diffusion = isinstance(model, ConditionalDenoisingUNet)
-    scheduler = NoiseScheduler() if is_diffusion else None
+    scheduler = NoiseScheduler(device=device) if is_diffusion else None
 
     with torch.no_grad():
         for (grid, robot), targets in tqdm(loader, desc="Val", leave=False):
