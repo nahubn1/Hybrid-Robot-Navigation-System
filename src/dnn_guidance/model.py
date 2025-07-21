@@ -178,6 +178,7 @@ class HRFiLMNet(nn.Module):
 
 
 def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
+    print('ay zare ken')
     """Factory to instantiate navigation models by name.
 
     Parameters
