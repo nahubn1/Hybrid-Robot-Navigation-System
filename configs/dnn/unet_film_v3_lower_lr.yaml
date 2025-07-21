@@ -12,8 +12,8 @@ ground_truth_dir: ground_truth
 val_split: 0.1
 
 # -- Output directories for checkpoints and TensorBoard logs --
-checkpoints_dir: results/checkpoints/unet_film_v3_lower_lr # Updated: Separate output folder
-log_dir: results/logs/unet_film_v3_lower_lr            # Updated: Separate log folder
+checkpoints_dir: checkpoints/unet_film_v3_lower_lr # Updated: Separate output folder
+log_dir: logs/unet_film_v3_lower_lr            # Updated: Separate log folder
 
 # -- Training parameters --
 device: cuda
