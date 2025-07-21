@@ -1,23 +1,32 @@
 from __future__ import annotations
 
 from pathlib import Path
-from torch import nn
+
 import torch
+from torch import nn
+from torchvision.models import ResNet34_Weights, resnet34
+from torchvision.ops import FeaturePyramidNetwork
 
-__all__ = ["UNetFiLM", "HRFiLMNet", "ConditionalDenoisingUNet", "create_model"]
+__all__ = [
+    "UNetFiLM",
+    "HRFiLMNet",
+    "ResNetFPNFiLM",
+    "ConditionalDenoisingUNet",
+    "create_model",
+]
 
-from .config import UNetConfig, HRFiLMConfig, DiffusionUNetConfig
+from .config import DiffusionUNetConfig, HRFiLMConfig, ResNetFPNFiLMConfig, UNetConfig
+from .diffusion import ConditionalDenoisingUNet
 from .modules import (
-    DoubleConv,
-    EncoderBlock,
     DecoderBlock,
     DecoderBlockWithGrid,
-    FiLMLayer,
-    FiLM,
-    ResidualBlock,
     DilatedResidualBlock,
+    DoubleConv,
+    EncoderBlock,
+    FiLM,
+    FiLMLayer,
+    ResidualBlock,
 )
-from .diffusion import ConditionalDenoisingUNet
 
 
 class UNetFiLM(nn.Module):
@@ -161,9 +170,15 @@ class HRFiLMNet(nn.Module):
         b3 = self.res4_b3(b3)
 
         # Upsample all branches to highest resolution
-        up1 = nn.functional.interpolate(b1, scale_factor=2, mode="bilinear", align_corners=False)
-        up2 = nn.functional.interpolate(b2, scale_factor=4, mode="bilinear", align_corners=False)
-        up3 = nn.functional.interpolate(b3, scale_factor=8, mode="bilinear", align_corners=False)
+        up1 = nn.functional.interpolate(
+            b1, scale_factor=2, mode="bilinear", align_corners=False
+        )
+        up2 = nn.functional.interpolate(
+            b2, scale_factor=4, mode="bilinear", align_corners=False
+        )
+        up3 = nn.functional.interpolate(
+            b3, scale_factor=8, mode="bilinear", align_corners=False
+        )
         feats = torch.cat([b0, up1, up2, up3], dim=1)
 
         feats = self.conv_fuse(feats)
@@ -175,6 +190,97 @@ class HRFiLMNet(nn.Module):
             crop = (logits.size(-1) - 200) // 2
             logits = logits[:, :, crop:-crop, crop:-crop]
         return logits
+
+
+class ResNetFPNFiLM(nn.Module):
+    """ResNet-34 backbone with FPN and FiLM conditioning."""
+
+    def __init__(self, cfg: ResNetFPNFiLMConfig | None = None) -> None:
+        super().__init__()
+        self.cfg = cfg or ResNetFPNFiLMConfig()
+        c = self.cfg
+
+        backbone = resnet34(weights=ResNet34_Weights.IMAGENET1K_V1)
+        if c.in_channels != 3:
+            conv1 = nn.Conv2d(
+                c.in_channels,
+                64,
+                kernel_size=7,
+                stride=1,
+                padding=3,
+                bias=False,
+            )
+            with torch.no_grad():
+                conv1.weight[:, :3] = backbone.conv1.weight
+                if c.in_channels > 3:
+                    extra = c.in_channels - 3
+                    conv1.weight[:, 3:] = backbone.conv1.weight.mean(
+                        dim=1, keepdim=True
+                    ).repeat(1, extra, 1, 1)
+        else:
+            conv1 = backbone.conv1
+
+        self.stem = nn.Sequential(
+            conv1,
+            backbone.bn1,
+            backbone.relu,
+        )
+        self.layer1 = backbone.layer1
+        self.layer2 = backbone.layer2
+        self.layer3 = backbone.layer3
+        self.layer4 = backbone.layer4
+
+        self.fpn = FeaturePyramidNetwork(
+            in_channels_list=[64, 128, 256, 512],
+            out_channels=256,
+            extra_blocks=None,
+        )
+
+        self.film1 = FiLM(cond_dim=c.robot_param_dim, feat_dim=256)
+        self.film2 = FiLM(cond_dim=c.robot_param_dim, feat_dim=256)
+
+        self.conv_fuse = nn.Conv2d(256 * 4, 256, kernel_size=1)
+        self.context = nn.Sequential(
+            DilatedResidualBlock(256, dilation=2),
+            DilatedResidualBlock(256, dilation=4),
+        )
+        self.head = nn.Sequential(
+            nn.Conv2d(256, 64, kernel_size=1),
+            nn.PixelShuffle(2),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16),
+            nn.Conv2d(16, c.out_channels, kernel_size=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, grid_tensor, robot_tensor):
+        c1 = self.layer1(self.stem(grid_tensor))
+        c2 = self.layer2(c1)
+        c3 = self.layer3(c2)
+        c4 = self.layer4(c3)
+
+        features = self.fpn({"0": c1, "1": c2, "2": c3, "3": c4})
+        p1 = features["0"]
+        p2 = self.film1(robot_tensor, features["1"])
+        p3 = features["2"]
+        p4 = features["3"]
+        p2 = nn.functional.interpolate(
+            p2, scale_factor=2, mode="bilinear", align_corners=False
+        )
+        p3 = nn.functional.interpolate(
+            p3, scale_factor=4, mode="bilinear", align_corners=False
+        )
+        p4 = nn.functional.interpolate(
+            p4, scale_factor=8, mode="bilinear", align_corners=False
+        )
+        p1 = self.film2(robot_tensor, p1)
+        feats = torch.cat([p1, p2, p3, p4], dim=1)
+        feats = self.conv_fuse(feats)
+        feats = self.context(feats)
+        out = self.head(feats)
+        if out.size(-1) > 200:
+            crop = (out.size(-1) - 200) // 2
+            out = out[:, :, crop:-crop, crop:-crop]
+        return out
 
 
 def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
@@ -203,6 +309,13 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
     if name in {"hr_film_net", "hrfilmnet"}:
         cfg = HRFiLMConfig.from_yaml(cfg_path) if cfg_path else HRFiLMConfig()
         return HRFiLMNet(cfg)
+    if name in {"resnet_fpn_film", "resfpnfilm"}:
+        cfg = (
+            ResNetFPNFiLMConfig.from_yaml(cfg_path)
+            if cfg_path
+            else ResNetFPNFiLMConfig()
+        )
+        return ResNetFPNFiLM(cfg)
     if name in {"diffusion_unet", "heatmap_diffusion"}:
         cfg = (
             DiffusionUNetConfig.from_yaml(cfg_path)
@@ -218,6 +331,4 @@ def create_model(name: str, cfg_path: str | Path | None = None) -> nn.Module:
             bottleneck_channels=cfg.bottleneck_channels,
             dec_channels=cfg.dec_channels,
         )
-    raise ValueError(f'Unknown model {name}')
-    
-
+    raise ValueError(f"Unknown model {name}")

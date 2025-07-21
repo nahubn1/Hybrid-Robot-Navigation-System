@@ -1,0 +1,4 @@
+# Default configuration for ResNet-FPN-FiLM
+in_channels: 4
+robot_param_dim: 2
+out_channels: 1
