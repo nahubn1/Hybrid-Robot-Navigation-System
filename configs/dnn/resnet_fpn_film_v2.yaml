@@ -7,8 +7,8 @@ samples_dir: training_data
 ground_truth_dir: ground_truth
 val_split: 0.1
 
-checkpoints_dir: checkpoints/resnet_fpn_film_v1_baseline
-log_dir: logs/resnet_fpn_film_v1_baseline
+checkpoints_dir: checkpoints/resnet_fpn_film_v2
+log_dir: logs/resnet_fpn_film_v2
 
 device: cuda
 epochs: 50
