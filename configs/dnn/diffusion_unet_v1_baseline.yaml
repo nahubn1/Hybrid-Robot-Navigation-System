@@ -1,0 +1,40 @@
+# Configuration for baseline training of Conditional Heatmap Diffusion Model
+
+# Experiment identifiers and reproducibility
+run_name: diffusion_unet_v1_baseline
+seed: 42
+model_name: diffusion_unet
+
+# Dataset locations and split ratios
+samples_dir: training_data
+ground_truth_dir: ground_truth
+val_split: 0.1
+
+# Output directories for checkpoints and TensorBoard logs
+checkpoints_dir: checkpoints/diffusion_unet_v1_baseline
+log_dir: logs/diffusion_unet_v1_baseline
+
+# Training parameters
+device: cuda
+epochs: 50
+batch_size: 8
+num_workers: 12
+use_amp: true
+early_stop_patience: 10
+
+# Optimizer configuration
+optimizer:
+  name: AdamW
+  lr: 0.0005
+  weight_decay: 0.0001
+
+# Learning rate scheduler settings
+scheduler:
+  name: CosineAnnealing
+  warmup_epochs: 5
+
+# Loss function weighting
+loss:
+  dice_weight: 0.5
+  focal_weight: 0.5
+  focal_gamma: 2.0

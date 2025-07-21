@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default="unet_film",
-        choices=["unet_film", "hr_film_net"],
+        choices=["unet_film", "hr_film_net", "diffusion_unet"],
         help="Model architecture to train",
     )
     parser.add_argument(
