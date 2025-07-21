@@ -9,6 +9,9 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
+from torch.nn import functional as F
+
+from .diffusion import ConditionalDenoisingUNet, NoiseScheduler
 
 __all__ = ["dice_score", "train_one_epoch", "validate_one_epoch"]
 
@@ -62,6 +65,8 @@ def train_one_epoch(
     model.train()
     epoch_loss = 0.0
     num_samples = 0
+    is_diffusion = isinstance(model, ConditionalDenoisingUNet)
+    scheduler = NoiseScheduler() if is_diffusion else None
 
     for (grid, robot), targets in tqdm(loader, desc="Train", leave=False):
         grid = grid.to(device)
@@ -70,8 +75,15 @@ def train_one_epoch(
         optimizer.zero_grad(set_to_none=True)
 
         with autocast():
-            logits = model(grid, robot)
-            loss = loss_fn(logits, targets)
+            if is_diffusion:
+                noise = torch.randn_like(targets)
+                t = torch.randint(0, scheduler.timesteps, (targets.size(0),), device=device)
+                noisy = scheduler.add_noise(targets, t, noise)
+                pred = model(noisy, t, grid, robot)
+                loss = F.mse_loss(pred, noise)
+            else:
+                logits = model(grid, robot)
+                loss = loss_fn(logits, targets)
 
         scaler.scale(loss).backward()
         scaler.step(optimizer)
@@ -99,6 +111,8 @@ def validate_one_epoch(
     val_loss = 0.0
     val_dice = 0.0
     num_samples = 0
+    is_diffusion = isinstance(model, ConditionalDenoisingUNet)
+    scheduler = NoiseScheduler() if is_diffusion else None
 
     with torch.no_grad():
         for (grid, robot), targets in tqdm(loader, desc="Val", leave=False):
@@ -106,9 +120,17 @@ def validate_one_epoch(
             robot = robot.to(device)
             targets = targets.to(device)
 
-            logits = model(grid, robot)
-            loss = loss_fn(logits, targets)
-            dice = dice_score(logits, targets)
+            if is_diffusion:
+                noise = torch.randn_like(targets)
+                t = torch.randint(0, scheduler.timesteps, (targets.size(0),), device=device)
+                noisy = scheduler.add_noise(targets, t, noise)
+                pred = model(noisy, t, grid, robot)
+                loss = F.mse_loss(pred, noise)
+                dice = torch.tensor(0.0, device=device)
+            else:
+                logits = model(grid, robot)
+                loss = loss_fn(logits, targets)
+                dice = dice_score(logits, targets)
 
             batch_size = grid.size(0)
             val_loss += loss.item() * batch_size
