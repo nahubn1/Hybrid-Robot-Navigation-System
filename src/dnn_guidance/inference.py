@@ -1,6 +1,6 @@
 """High-level model inference interface."""
 
-from __future__ import annotations
+from __future__ in annotations
 
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
@@ -28,7 +28,8 @@ class InferenceHandler:
         Optional path to a ``state_dict`` checkpoint. If ``None`` the model is
         left untrained.
     ``weight`` (optional)
-        Weight for blending. Defaults to ``1.0``.
+        A scaling factor (confidence) for this model's output before the 'max'
+        operation. Defaults to ``1.0``.
     """
 
     def __init__(self, model_configs: Dict[str, Any] | Iterable[Dict[str, Any]], device: str | torch.device = "cpu") -> None:
@@ -71,26 +72,35 @@ class InferenceHandler:
         return grid_tensor.to(self.device), robot_tensor.to(self.device)
 
     def predict(self, grid_numpy: np.ndarray, robot_numpy: np.ndarray) -> np.ndarray:
-        """Run the model's forward pass and return a heatmap as a NumPy array."""
+        """Run the model's forward pass and return a heatmap as a NumPy array.
+        
+        If multiple models are loaded, their outputs are scaled by their weight
+        and then combined by taking the element-wise maximum.
+        """
         grid_tensor, robot_tensor = self._preprocess(grid_numpy, robot_numpy)
 
-        heatmaps: List[np.ndarray] = []
-        weights: List[float] = []
+        # --- MODIFIED: Will store scaled heatmaps ---
+        scaled_heatmaps: List[np.ndarray] = []
         with torch.no_grad():
-            for model, w in self.models:
+            for model, weight in self.models:
                 logits = model(grid_tensor, robot_tensor)
                 probs = torch.sigmoid(logits)
                 heat = probs.squeeze(0).squeeze(0).cpu().numpy()
-                heatmaps.append(heat)
-                weights.append(w)
+                
+                # Scale the heatmap by its model's weight before adding to the list
+                scaled_heatmaps.append(heat * weight)
 
-        if len(heatmaps) == 1:
-            return heatmaps[0]
-
-        weight_sum = float(np.sum(weights)) if weights else 1.0
-        blended = np.zeros_like(heatmaps[0])
-        for heat, w in zip(heatmaps, weights):
-            blended += heat * w
-        blended /= weight_sum
+        # If only one model, return its (scaled) heatmap.
+        if len(scaled_heatmaps) == 1:
+            # Clip to ensure the output is always a valid probability [0, 1]
+            return np.clip(scaled_heatmaps[0], 0.0, 1.0)
+        
+        # --- MODIFIED COMBINATION LOGIC ---
+        # If multiple heatmaps, stack the SCALED heatmaps and take the element-wise maximum.
+        blended = np.maximum.reduce(scaled_heatmaps)
+        
+        # Clip the final result to ensure it remains a valid probability map.
         blended = np.clip(blended, 0.0, 1.0)
+        # --- END OF MODIFICATION ---
+        
         return blended
