@@ -41,14 +41,28 @@ def plot_inference_comparison(data: Mapping[str, Any], *, output_path: str | Pat
     axes[0].imshow(grid_vis, cmap=cmap_grid, origin='lower')
     axes[0].set_title('Input Problem')
 
-    # Ground truth heatmap
-    axes[1].imshow(gt_heatmap, cmap='viridis', vmin=0, vmax=1, origin='lower')
+    # Determine start/goal for scatter overlays
+    start = np.argwhere(grid == 8)
+    goal = np.argwhere(grid == 9)
+
+    # Ground truth heatmap with map overlay
+    axes[1].imshow(grid_vis, cmap=cmap_grid, origin='lower')
+    axes[1].imshow(gt_heatmap, cmap='viridis', vmin=0, vmax=1, origin='lower', alpha=0.6)
+    if start.size:
+        axes[1].scatter(start[:, 1], start[:, 0], c='green', edgecolors='black', s=50)
+    if goal.size:
+        axes[1].scatter(goal[:, 1], goal[:, 0], c='red', edgecolors='black', s=50, marker='*')
     axes[1].set_title('Ground Truth')
 
-    # Predictions
+    # Predictions with map overlay
     for ax, (name, heatmap) in zip(axes[2:], predictions.items()):
         hm = np.squeeze(np.asarray(heatmap))
-        ax.imshow(hm, cmap='viridis', vmin=0, vmax=1, origin='lower')
+        ax.imshow(grid_vis, cmap=cmap_grid, origin='lower')
+        ax.imshow(hm, cmap='viridis', vmin=0, vmax=1, origin='lower', alpha=0.6)
+        if start.size:
+            ax.scatter(start[:, 1], start[:, 0], c='green', edgecolors='black', s=50)
+        if goal.size:
+            ax.scatter(goal[:, 1], goal[:, 0], c='red', edgecolors='black', s=50, marker='*')
         ax.set_title(name)
 
     for ax in axes:
