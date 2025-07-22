@@ -1,6 +1,6 @@
 """High-level model inference interface."""
 
-from __future__ in annotations
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
