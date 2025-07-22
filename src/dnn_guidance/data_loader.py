@@ -70,6 +70,21 @@ class PathfindingDataset(Dataset):
             if random.random() < 0.5:
                 grid = np.flipud(grid).copy()
                 heatmap = np.flipud(heatmap).copy()
+            tx = random.randint(-5, 5)
+            ty = random.randint(-5, 5)
+            if tx:
+                grid = np.roll(grid, tx, axis=1)
+                heatmap = np.roll(heatmap, tx, axis=1)
+            if ty:
+                grid = np.roll(grid, ty, axis=0)
+                heatmap = np.roll(heatmap, ty, axis=0)
+            if random.random() < 0.4:
+                lam = np.random.beta(0.4, 0.4)
+                j = random.randint(0, len(self.pairs) - 1)
+                _, robot2, heatmap2 = self.get_raw_item(j)
+                heatmap = lam * heatmap + (1 - lam) * heatmap2
+                clearance = lam * clearance + (1 - lam) * robot2[0]
+                step_size = lam * step_size + (1 - lam) * robot2[1]
 
         start = (grid == 8).astype(np.float32)
         goal = (grid == 9).astype(np.float32)
@@ -82,7 +97,13 @@ class PathfindingDataset(Dataset):
 
         heatmap_tensor = torch.from_numpy(np.ascontiguousarray(heatmap[None, ...]))
 
-        return (grid_tensor.float(), robot_tensor), heatmap_tensor.float()
+        if self.augment and random.random() < 0.3:
+            noise = torch.randn_like(grid_tensor) * 0.05
+            grid_tensor = (grid_tensor.float() + noise).clamp(0.0, 1.0)
+        else:
+            grid_tensor = grid_tensor.float()
+
+        return (grid_tensor, robot_tensor), heatmap_tensor.float()
 
     def get_raw_item(self, idx: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return the raw arrays without any preprocessing or augmentation."""

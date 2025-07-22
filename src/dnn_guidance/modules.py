@@ -6,6 +6,26 @@ import torch
 from torch import nn
 
 
+class SELayer(nn.Module):
+    """Squeeze-and-Excitation module."""
+
+    def __init__(self, channels: int, reduction: int = 8) -> None:
+        super().__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channels, channels // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channels // reduction, channels, bias=False),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover - simple
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y
+
+
 class DoubleConv(nn.Module):
     """Two consecutive convolution layers with BatchNorm and ReLU."""
 
@@ -115,9 +135,9 @@ class FiLM(nn.Module):
 
 
 class ResidualBlock(nn.Module):
-    """Simple residual block with two 3x3 convolutions."""
+    """Simple residual block with optional SE and dropout."""
 
-    def __init__(self, channels: int, *, dilation: int = 1) -> None:
+    def __init__(self, channels: int, *, dilation: int = 1, se: bool = False, dropout: float = 0.0) -> None:
         super().__init__()
         padding = dilation
         self.conv1 = nn.Conv2d(
@@ -129,6 +149,8 @@ class ResidualBlock(nn.Module):
             channels, channels, kernel_size=3, padding=padding, dilation=dilation, bias=False
         )
         self.bn2 = nn.BatchNorm2d(channels)
+        self.se = SELayer(channels) if se else nn.Identity()
+        self.dropout = nn.Dropout2d(dropout) if dropout > 0 else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # pragma: no cover - simple
         out = self.conv1(x)
@@ -136,6 +158,8 @@ class ResidualBlock(nn.Module):
         out = self.relu(out)
         out = self.conv2(out)
         out = self.bn2(out)
+        out = self.se(out)
+        out = self.dropout(out)
         out += x
         return self.relu(out)
 

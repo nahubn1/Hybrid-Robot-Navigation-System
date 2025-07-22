@@ -102,23 +102,25 @@ class HRFiLMNet(nn.Module):
             nn.ReLU(inplace=True),
         )
 
-        self.stage1 = nn.Sequential(*[ResidualBlock(32) for _ in range(4)])
+        self.stage1 = nn.Sequential(
+            *[ResidualBlock(32, se=True, dropout=c.dropout) for _ in range(4)]
+        )
 
         self.down2 = self._make_downsample(c.stage_channels[0], c.stage_channels[1])
         self.down3 = self._make_downsample(c.stage_channels[1], c.stage_channels[2])
         self.down4 = self._make_downsample(c.stage_channels[2], c.stage_channels[3])
 
-        self.res2_b0 = ResidualBlock(c.stage_channels[0])
-        self.res2_b1 = ResidualBlock(c.stage_channels[1])
-        self.res3_b0 = ResidualBlock(c.stage_channels[0])
-        self.res3_b1 = ResidualBlock(c.stage_channels[1])
-        self.res3_b2 = ResidualBlock(c.stage_channels[2])
-        self.res4_b0 = ResidualBlock(c.stage_channels[0])
-        self.res4_b1 = ResidualBlock(c.stage_channels[1])
-        self.res4_b2 = ResidualBlock(c.stage_channels[2])
-        self.res4_b3 = ResidualBlock(c.stage_channels[3])
+        self.res2_b0 = ResidualBlock(c.stage_channels[0], se=True, dropout=c.dropout)
+        self.res2_b1 = ResidualBlock(c.stage_channels[1], se=True, dropout=c.dropout)
+        self.res3_b0 = ResidualBlock(c.stage_channels[0], se=True, dropout=c.dropout)
+        self.res3_b1 = ResidualBlock(c.stage_channels[1], se=True, dropout=c.dropout)
+        self.res3_b2 = ResidualBlock(c.stage_channels[2], se=True, dropout=c.dropout)
+        self.res4_b0 = ResidualBlock(c.stage_channels[0], se=True, dropout=c.dropout)
+        self.res4_b1 = ResidualBlock(c.stage_channels[1], se=True, dropout=c.dropout)
+        self.res4_b2 = ResidualBlock(c.stage_channels[2], se=True, dropout=c.dropout)
+        self.res4_b3 = ResidualBlock(c.stage_channels[3], se=True, dropout=c.dropout)
 
-        # FiLM modules for stage3 and stage4
+        # FiLM modules for stage2/3 and stage4
         self.film1 = FiLM(cond_dim=c.robot_param_dim, feat_dim=c.stage_channels[1])
         self.film2 = FiLM(cond_dim=c.robot_param_dim, feat_dim=c.stage_channels[0])
 
@@ -126,9 +128,11 @@ class HRFiLMNet(nn.Module):
         self.context = nn.Sequential(
             DilatedResidualBlock(256, dilation=2),
             DilatedResidualBlock(256, dilation=4),
+            DilatedResidualBlock(256, dilation=6),
         )
-
-        self.conv_fuse = nn.Conv2d(sum(c.stage_channels), 256, kernel_size=1)
+        self.highfreq_conv = nn.Conv2d(1, c.highfreq_channels, kernel_size=1)
+        self.conv_fuse = nn.Conv2d(sum(c.stage_channels) + c.highfreq_channels, 256, kernel_size=1)
+        self.dropout = nn.Dropout2d(c.dropout)
         self.conv_head = nn.Sequential(
             nn.Conv2d(256, 64, kernel_size=1),
             nn.PixelShuffle(2),  # 64 -> 16 channels, 200 -> 400
@@ -149,8 +153,9 @@ class HRFiLMNet(nn.Module):
         x = self.stem(grid_tensor)
         b0 = self.stage1(x)
 
-        # Stage2
+        # Stage2 with FiLM on branch1
         b1 = self.down2(b0)
+        b1 = self.film1(robot_tensor, b1)
         b0 = self.res2_b0(b0)
         b1 = self.res2_b1(b1)
 
@@ -179,9 +184,11 @@ class HRFiLMNet(nn.Module):
         up3 = nn.functional.interpolate(
             b3, scale_factor=8, mode="bilinear", align_corners=False
         )
-        feats = torch.cat([b0, up1, up2, up3], dim=1)
+        hf = self.highfreq_conv(grid_tensor[:, 2:3])
+        feats = torch.cat([b0, up1, up2, up3, hf], dim=1)
 
         feats = self.conv_fuse(feats)
+        feats = self.dropout(feats)
         feats = self.context(feats)
         logits = self.conv_head(feats)
 

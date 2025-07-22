@@ -41,6 +41,8 @@ class HRFiLMConfig:
     robot_param_dim: int = 2
     stage_channels: Tuple[int, int, int, int] = (32, 64, 128, 256)
     out_channels: int = 1
+    dropout: float = 0.05
+    highfreq_channels: int = 8
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "HRFiLMConfig":
@@ -50,6 +52,8 @@ class HRFiLMConfig:
             robot_param_dim=int(data.get("robot_param_dim", cls.robot_param_dim)),
             stage_channels=tuple(data.get("stage_channels", cls.stage_channels)),
             out_channels=int(data.get("out_channels", cls.out_channels)),
+            dropout=float(data.get("dropout", cls.dropout)),
+            highfreq_channels=int(data.get("highfreq_channels", cls.highfreq_channels)),
         )
 
 
