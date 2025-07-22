@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Dict, Iterable, List, Tuple
 
 import numpy as np
 import torch
@@ -12,27 +12,46 @@ from .data_loader import RobotParamScaling
 
 
 class InferenceHandler:
-    """Run inference with a trained model using simple NumPy inputs.
+    """Run inference with one or more trained models using simple NumPy inputs.
 
-    Parameters
-    ----------
-    model_class : type
+    The handler can operate in three modes depending on ``model_configs``:
+
+    1. **Single-model** – a single configuration dictionary.
+    2. **Hybrid-model** – a list of configuration dictionaries to blend outputs.
+    3. **Untrained** – configuration with ``checkpoint_path`` set to ``None``.
+
+    Each configuration dictionary must contain the following keys:
+
+    ``model_class``
         Class object of the neural network architecture to instantiate.
-    model_checkpoint_path : str or Path or None
-        Path to a ``state_dict`` checkpoint for the model. If ``None`` the model
-        is used with randomly initialised weights.
-    device : str or torch.device
-        Device on which to run inference.
+    ``checkpoint_path``
+        Optional path to a ``state_dict`` checkpoint. If ``None`` the model is
+        left untrained.
+    ``weight`` (optional)
+        Weight for blending. Defaults to ``1.0``.
     """
 
-    def __init__(self, model_class: type, model_checkpoint_path: str | Path | None, device: str | torch.device = "cpu") -> None:
+    def __init__(self, model_configs: Dict[str, Any] | Iterable[Dict[str, Any]], device: str | torch.device = "cpu") -> None:
         self.device = torch.device(device)
-        self.model = model_class()
-        if model_checkpoint_path is not None:
-            state_dict = torch.load(model_checkpoint_path, map_location=self.device)
-            self.model.load_state_dict(state_dict)
-        self.model.to(self.device)
-        self.model.eval()
+        if isinstance(model_configs, dict):
+            configs: List[Dict[str, Any]] = [model_configs]
+        else:
+            configs = list(model_configs)
+
+        self.models: List[Tuple[torch.nn.Module, float]] = []
+        for cfg in configs:
+            cls = cfg["model_class"]
+            ckpt = cfg.get("checkpoint_path")
+            weight = float(cfg.get("weight", 1.0))
+
+            model = cls()
+            if ckpt is not None:
+                state_dict = torch.load(Path(ckpt), map_location=self.device)
+                model.load_state_dict(state_dict)
+            model.to(self.device)
+            model.eval()
+            self.models.append((model, weight))
+
         self.scaling = RobotParamScaling()
 
     def _preprocess(self, grid_numpy: np.ndarray, robot_numpy: np.ndarray) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -54,8 +73,24 @@ class InferenceHandler:
     def predict(self, grid_numpy: np.ndarray, robot_numpy: np.ndarray) -> np.ndarray:
         """Run the model's forward pass and return a heatmap as a NumPy array."""
         grid_tensor, robot_tensor = self._preprocess(grid_numpy, robot_numpy)
+
+        heatmaps: List[np.ndarray] = []
+        weights: List[float] = []
         with torch.no_grad():
-            logits = self.model(grid_tensor, robot_tensor)
-            probs = torch.sigmoid(logits)
-        heatmap = probs.squeeze(0).squeeze(0).cpu().numpy()
-        return heatmap
+            for model, w in self.models:
+                logits = model(grid_tensor, robot_tensor)
+                probs = torch.sigmoid(logits)
+                heat = probs.squeeze(0).squeeze(0).cpu().numpy()
+                heatmaps.append(heat)
+                weights.append(w)
+
+        if len(heatmaps) == 1:
+            return heatmaps[0]
+
+        weight_sum = float(np.sum(weights)) if weights else 1.0
+        blended = np.zeros_like(heatmaps[0])
+        for heat, w in zip(heatmaps, weights):
+            blended += heat * w
+        blended /= weight_sum
+        blended = np.clip(blended, 0.0, 1.0)
+        return blended
