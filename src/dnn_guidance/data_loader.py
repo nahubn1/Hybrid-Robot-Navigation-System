@@ -83,3 +83,16 @@ class PathfindingDataset(Dataset):
         heatmap_tensor = torch.from_numpy(np.ascontiguousarray(heatmap[None, ...]))
 
         return (grid_tensor.float(), robot_tensor), heatmap_tensor.float()
+
+    def get_raw_item(self, idx: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Return the raw arrays without any preprocessing or augmentation."""
+        sample_path, gt_path = self.pairs[idx]
+        with np.load(sample_path) as data:
+            grid = data["map"].astype(np.uint8)
+            clearance = float(data["clearance"])
+            step_size = float(data["step_size"])
+        with np.load(gt_path) as gtd:
+            heatmap = gtd["heatmap"].astype(np.float32)
+
+        robot = np.array([clearance, step_size], dtype=np.float32)
+        return grid, robot, heatmap

@@ -22,8 +22,8 @@ def plot_inference_comparison(data: Mapping[str, Any], *, output_path: str | Pat
     matplotlib.figure.Figure
         The generated figure instance.
     """
-    grid = np.asarray(data['input_grid'])
-    gt_heatmap = np.asarray(data['ground_truth_heatmap'])
+    grid = np.squeeze(np.asarray(data['input_grid']))
+    gt_heatmap = np.squeeze(np.asarray(data['ground_truth_heatmap']))
     predictions: Mapping[str, np.ndarray] = data.get('predictions', {})
 
     ncols = 2 + len(predictions)
@@ -47,7 +47,8 @@ def plot_inference_comparison(data: Mapping[str, Any], *, output_path: str | Pat
 
     # Predictions
     for ax, (name, heatmap) in zip(axes[2:], predictions.items()):
-        ax.imshow(heatmap, cmap='viridis', vmin=0, vmax=1, origin='lower')
+        hm = np.squeeze(np.asarray(heatmap))
+        ax.imshow(hm, cmap='viridis', vmin=0, vmax=1, origin='lower')
         ax.set_title(name)
 
     for ax in axes:
