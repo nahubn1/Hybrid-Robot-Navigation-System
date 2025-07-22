@@ -53,6 +53,7 @@ def train_one_epoch(
     loss_fn: nn.Module,
     device: torch.device,
     scaler: GradScaler,
+    max_grad_norm: float | None = None,
 ) -> float:
     """Run a single training epoch.
 
@@ -86,6 +87,9 @@ def train_one_epoch(
                 loss = loss_fn(logits, targets)
 
         scaler.scale(loss).backward()
+        if max_grad_norm is not None:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
         scaler.step(optimizer)
         scaler.update()
 
@@ -110,6 +114,7 @@ def validate_one_epoch(
     model.eval()
     val_loss = 0.0
     val_dice = 0.0
+    val_coverage = 0.0
     num_samples = 0
     is_diffusion = isinstance(model, ConditionalDenoisingUNet)
     scheduler = NoiseScheduler(device=device) if is_diffusion else None
@@ -131,13 +136,17 @@ def validate_one_epoch(
                 logits = model(grid, robot)
                 loss = loss_fn(logits, targets)
                 dice = dice_score(logits, targets)
+                cov = torch.sigmoid(logits).mean()
 
             batch_size = grid.size(0)
             val_loss += loss.item() * batch_size
             val_dice += dice.item() * batch_size
+            if not is_diffusion:
+                val_coverage += cov.item() * batch_size
             num_samples += batch_size
 
     avg_loss = val_loss / max(1, num_samples)
     avg_dice = val_dice / max(1, num_samples)
-    return avg_loss, avg_dice
+    avg_cov = val_coverage / max(1, num_samples)
+    return avg_loss, avg_dice, avg_cov
 

@@ -86,8 +86,10 @@ def main() -> None:
     optimizer = optim_cls(model.parameters(), lr=opt_cfg["lr"], weight_decay=opt_cfg["weight_decay"])
     scheduler = None
     sched_cfg = cfg.get("scheduler")
+    warmup_epochs = 0
     if sched_cfg and sched_cfg.get("name") == "CosineAnnealing":
-        t_max = cfg["epochs"] - sched_cfg.get("warmup_epochs", 0)
+        warmup_epochs = sched_cfg.get("warmup_epochs", 0)
+        t_max = cfg["epochs"] - warmup_epochs
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=t_max)
 
     loss_cfg = cfg["loss"]
@@ -103,19 +105,32 @@ def main() -> None:
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
     best_path = checkpoints_dir / f"{model_name}_best.pth"
 
+    patience = cfg.get("early_stop_patience", 0)
+    epochs_no_improve = 0
     for epoch in range(cfg["epochs"]):
         print(f"--- Epoch {epoch + 1}/{cfg['epochs']} ---")
-        train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device, scaler)
-        val_loss, val_dice = validate_one_epoch(model, val_loader, loss_fn, device)
+        train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device, scaler, max_grad_norm=3.0)
+        val_loss, val_dice, val_cov = validate_one_epoch(model, val_loader, loss_fn, device)
         if scheduler:
-            scheduler.step()
+            if epoch < warmup_epochs:
+                lr = opt_cfg["lr"] * float(epoch + 1) / max(1, warmup_epochs)
+                for pg in optimizer.param_groups:
+                    pg["lr"] = lr
+            else:
+                scheduler.step()
 
         print(
-            f"train_loss={train_loss:.4f} val_loss={val_loss:.4f} val_dice={val_dice:.4f}"
+            f"train_loss={train_loss:.4f} val_loss={val_loss:.4f} val_dice={val_dice:.4f} coverage={val_cov:.4f}"
         )
         if val_dice > best_dice:
             best_dice = val_dice
+            epochs_no_improve = 0
             torch.save(model.state_dict(), best_path)
+        else:
+            epochs_no_improve += 1
+            if patience and epochs_no_improve >= patience:
+                print("Early stopping")
+                break
 
     print(f"Best Dice: {best_dice:.4f}. Model saved to {best_path}")
 
