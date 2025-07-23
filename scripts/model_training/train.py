@@ -11,7 +11,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.amp import GradScaler
+from torch.cuda.amp import GradScaler
 from sklearn.model_selection import train_test_split
 
 SRC_PATH = Path(__file__).resolve().parents[2] / 'src'
