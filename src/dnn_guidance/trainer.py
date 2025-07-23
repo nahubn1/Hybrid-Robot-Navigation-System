@@ -74,7 +74,7 @@ def train_one_epoch(
         targets = targets.to(device)
         optimizer.zero_grad(set_to_none=True)
 
-        with autocast():
+        with autocast(device_type='cuda'):
             if is_diffusion:
                 noise = torch.randn_like(targets)
                 t = torch.randint(0, scheduler.timesteps, (targets.size(0),), device=device)
