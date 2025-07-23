@@ -266,13 +266,13 @@ class ResNetFPNFiLM(nn.Module):
             nn.Conv2d(16, c.out_channels, kernel_size=1),
         )
 
-    def load_state_dict(self, state_dict, strict: bool = True):
+    def load_state_dict(self, state_dict, strict: bool = False):
         """Load checkpoint weights with backward compatibility.
 
-        The v2 architecture adds modules and slightly reorders the ``head``
-        layers compared to v1. When loading a v1 checkpoint we remap the old
-        ``head.2`` and ``head.3`` parameters to the updated indices before
-        delegating to ``nn.Module.load_state_dict``.
+        The v2 architecture introduces extra layers and rearranges the ``head``
+        convolutions. This helper remaps the old parameter names and defaults to
+        ``strict=False`` so that v1 checkpoints lacking the new weights can be
+        loaded without errors.
         """
         rename_map = {
             "head.2.weight": "head.3.weight",
@@ -280,10 +280,20 @@ class ResNetFPNFiLM(nn.Module):
             "head.3.weight": "head.6.weight",
             "head.3.bias": "head.6.bias",
         }
-        sd = {
-            rename_map.get(k, k): v for k, v in state_dict.items()
-        }
-        return super().load_state_dict(sd, strict=strict)
+        new_state = {rename_map.get(k, k): v for k, v in state_dict.items()}
+
+        # Always perform the actual loading with ``strict=False`` to collect
+        # missing or unexpected keys without raising.
+        load_info = super().load_state_dict(new_state, strict=False)
+
+        if strict and (load_info.missing_keys or load_info.unexpected_keys):
+            missing = ", ".join(load_info.missing_keys)
+            unexpected = ", ".join(load_info.unexpected_keys)
+            raise RuntimeError(
+                f"Error(s) in loading state_dict for {self.__class__.__name__}:"
+                f"\n\tMissing key(s): {missing}\n\tUnexpected key(s): {unexpected}"
+            )
+        return load_info
 
     def forward(self, grid_tensor, robot_tensor, mc_dropout: bool = False):
         b, _, h, w = grid_tensor.shape
