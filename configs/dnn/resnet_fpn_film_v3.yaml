@@ -1,0 +1,33 @@
+# Training configuration for ResNet-FPN-FiLM v3
+run_name: resnet_fpn_film_v3
+seed: 42
+model_name: resnet_fpn_film
+
+samples_dir: training_data
+ground_truth_dir: ground_truth
+val_split: 0.1
+
+checkpoints_dir: checkpoints/resnet_fpn_film_v3
+log_dir: logs/resnet_fpn_film_v3
+
+device: cuda
+epochs: 50
+batch_size: 8
+num_workers: 12
+use_amp: true
+early_stop_patience: 4
+
+optimizer:
+  name: AdamW
+  lr: 0.0002
+  weight_decay: 0.01
+  fused: true
+
+scheduler:
+  name: CosineAnnealing
+  warmup_epochs: 1
+
+loss:
+  dice_weight: 0.5
+  focal_weight: 0.4
+  focal_gamma: 3.0
