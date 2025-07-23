@@ -1,7 +1,6 @@
 """Training and validation utilities for DNN-guided navigation models."""
 
 from __future__ import annotations
-
 from typing import Iterable, Tuple
 
 import torch
