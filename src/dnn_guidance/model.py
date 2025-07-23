@@ -4,6 +4,7 @@ from pathlib import Path
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torchvision.models import ResNet34_Weights, resnet34
 from torchvision.ops import FeaturePyramidNetwork
 
@@ -206,6 +207,10 @@ class ResNetFPNFiLM(nn.Module):
         super().__init__()
         self.cfg = cfg or ResNetFPNFiLMConfig()
         c = self.cfg
+        self.coord_conv = nn.Conv2d(c.in_channels + 2, c.in_channels, kernel_size=1)
+        self.attn_gate = nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Conv2d(256, 256 * 3, kernel_size=1), nn.Sigmoid())
+        self.film3 = FiLM(cond_dim=c.robot_param_dim, feat_dim=256)
+        self.drop_p = 0.1
 
         backbone = resnet34(weights=ResNet34_Weights.IMAGENET1K_V1)
         if c.in_channels != 3:
@@ -254,34 +259,73 @@ class ResNetFPNFiLM(nn.Module):
         self.head = nn.Sequential(
             nn.Conv2d(256, 64, kernel_size=1),
             nn.PixelShuffle(2),
+            nn.Dropout2d(self.drop_p),
             nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16),
+            nn.Conv2d(16, 16, kernel_size=1),
+            nn.ReLU(inplace=True),
             nn.Conv2d(16, c.out_channels, kernel_size=1),
         )
 
-    def forward(self, grid_tensor, robot_tensor):
+    def load_state_dict(self, state_dict, strict: bool = True):
+        """Load checkpoint weights with backward compatibility.
+
+        The v2 architecture adds modules and slightly reorders the ``head``
+        layers compared to v1. When loading a v1 checkpoint we remap the old
+        ``head.2`` and ``head.3`` parameters to the updated indices before
+        delegating to ``nn.Module.load_state_dict``.
+        """
+        rename_map = {
+            "head.2.weight": "head.3.weight",
+            "head.2.bias": "head.3.bias",
+            "head.3.weight": "head.6.weight",
+            "head.3.bias": "head.6.bias",
+        }
+        sd = {
+            rename_map.get(k, k): v for k, v in state_dict.items()
+        }
+        return super().load_state_dict(sd, strict=strict)
+
+    def forward(self, grid_tensor, robot_tensor, mc_dropout: bool = False):
+        b, _, h, w = grid_tensor.shape
+        y = torch.linspace(-1, 1, h, device=grid_tensor.device)
+        x = torch.linspace(-1, 1, w, device=grid_tensor.device)
+        yy, xx = torch.meshgrid(y, x, indexing="ij")
+        coords = torch.stack([xx, yy], dim=0).expand(b, -1, h, w)
+        grid_tensor = torch.cat([grid_tensor, coords], dim=1)
+        grid_tensor = self.coord_conv(grid_tensor)
+
         c1 = self.layer1(self.stem(grid_tensor))
         c2 = self.layer2(c1)
         c3 = self.layer3(c2)
         c4 = self.layer4(c3)
 
         features = self.fpn({"0": c1, "1": c2, "2": c3, "3": c4})
-        p1 = features["0"]
-        p2 = self.film1(robot_tensor, features["1"])
-        p3 = features["2"]
-        p4 = features["3"]
-        p2 = nn.functional.interpolate(
-            p2, scale_factor=2, mode="bilinear", align_corners=False
-        )
-        p3 = nn.functional.interpolate(
-            p3, scale_factor=4, mode="bilinear", align_corners=False
-        )
-        p4 = nn.functional.interpolate(
-            p4, scale_factor=8, mode="bilinear", align_corners=False
-        )
+        p1, p2, p3, p4 = features["0"], features["1"], features["2"], features["3"]
+
+        gates = self.attn_gate(p4).view(b, 3, 256, 1, 1)
+        g1, g2, g3 = gates[:, 0], gates[:, 1], gates[:, 2]
+        p1 = p1 * g1
+        p2 = p2 * g2
+        p3 = p3 * g3
+
         p1 = self.film2(robot_tensor, p1)
+        p2 = self.film1(robot_tensor, p2)
+        p3 = self.film3(robot_tensor, p3)
+
+        train_flag = self.training or mc_dropout
+        p1 = F.dropout2d(p1, self.drop_p, training=train_flag)
+        p2 = F.dropout2d(p2, self.drop_p, training=train_flag)
+        p3 = F.dropout2d(p3, self.drop_p, training=train_flag)
+        p4 = F.dropout2d(p4, self.drop_p, training=train_flag)
+
+        p2 = F.interpolate(p2, scale_factor=2, mode="bilinear", align_corners=False)
+        p3 = F.interpolate(p3, scale_factor=4, mode="bilinear", align_corners=False)
+        p4 = F.interpolate(p4, scale_factor=8, mode="bilinear", align_corners=False)
+
         feats = torch.cat([p1, p2, p3, p4], dim=1)
         feats = self.conv_fuse(feats)
         feats = self.context(feats)
+        feats = F.dropout2d(feats, self.drop_p, training=train_flag)
         out = self.head(feats)
         if out.size(-1) > 200:
             crop = (out.size(-1) - 200) // 2
