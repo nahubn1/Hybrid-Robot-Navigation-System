@@ -266,6 +266,25 @@ class ResNetFPNFiLM(nn.Module):
             nn.Conv2d(16, c.out_channels, kernel_size=1),
         )
 
+    def load_state_dict(self, state_dict, strict: bool = True):
+        """Load checkpoint weights with backward compatibility.
+
+        The v2 architecture adds modules and slightly reorders the ``head``
+        layers compared to v1. When loading a v1 checkpoint we remap the old
+        ``head.2`` and ``head.3`` parameters to the updated indices before
+        delegating to ``nn.Module.load_state_dict``.
+        """
+        rename_map = {
+            "head.2.weight": "head.3.weight",
+            "head.2.bias": "head.3.bias",
+            "head.3.weight": "head.6.weight",
+            "head.3.bias": "head.6.bias",
+        }
+        sd = {
+            rename_map.get(k, k): v for k, v in state_dict.items()
+        }
+        return super().load_state_dict(sd, strict=strict)
+
     def forward(self, grid_tensor, robot_tensor, mc_dropout: bool = False):
         b, _, h, w = grid_tensor.shape
         y = torch.linspace(-1, 1, h, device=grid_tensor.device)

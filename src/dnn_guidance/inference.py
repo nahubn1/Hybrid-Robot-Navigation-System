@@ -48,7 +48,8 @@ class InferenceHandler:
             model = cls()
             if ckpt is not None:
                 state_dict = torch.load(Path(ckpt), map_location=self.device)
-                model.load_state_dict(state_dict)
+                # Allow missing keys when loading older checkpoints
+                model.load_state_dict(state_dict, strict=False)
             model.to(self.device)
             model.eval()
             self.models.append((model, weight))
