@@ -1,3 +1,4 @@
+
 # Training configuration for ResNet-FPN-FiLM v3
 run_name: resnet_fpn_film_v3
 seed: 42
@@ -10,12 +11,14 @@ val_split: 0.1
 checkpoints_dir: checkpoints/resnet_fpn_film_v3
 log_dir: logs/resnet_fpn_film_v3
 
+
 device: cuda
 epochs: 50
 batch_size: 8
 num_workers: 12
 use_amp: true
 early_stop_patience: 4
+
 
 optimizer:
   name: AdamW
