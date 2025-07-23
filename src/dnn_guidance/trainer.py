@@ -6,7 +6,7 @@ from typing import Iterable, Tuple
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
 from torch.nn import functional as F
 
