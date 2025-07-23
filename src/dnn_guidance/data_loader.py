@@ -70,22 +70,7 @@ class PathfindingDataset(Dataset):
             if random.random() < 0.5:
                 grid = np.flipud(grid).copy()
                 heatmap = np.flipud(heatmap).copy()
-            tx = random.randint(-5, 5)
-            ty = random.randint(-5, 5)
-            if tx:
-                grid = np.roll(grid, tx, axis=1)
-                heatmap = np.roll(heatmap, tx, axis=1)
-            if ty:
-                grid = np.roll(grid, ty, axis=0)
-                heatmap = np.roll(heatmap, ty, axis=0)
-            if random.random() < 0.4:
-                lam = np.random.beta(0.4, 0.4)
-                j = random.randint(0, len(self.pairs) - 1)
-                _, robot2, heatmap2 = self.get_raw_item(j)
-                heatmap = lam * heatmap + (1 - lam) * heatmap2
-                clearance = lam * clearance + (1 - lam) * robot2[0]
-                step_size = lam * step_size + (1 - lam) * robot2[1]
-
+                
         start = (grid == 8).astype(np.float32)
         goal = (grid == 9).astype(np.float32)
         traversable = ((grid == 0) | (grid == 8) | (grid == 9)).astype(np.float32)
