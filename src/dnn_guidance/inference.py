@@ -82,26 +82,27 @@ class InferenceHandler:
 
         # --- MODIFIED: Will store scaled heatmaps ---
         scaled_heatmaps: List[np.ndarray] = []
+        weights: List[float] = []
         with torch.no_grad():
             for model, weight in self.models:
                 logits = model(grid_tensor, robot_tensor)
                 probs = torch.sigmoid(logits)
                 heat = probs.squeeze(0).squeeze(0).cpu().numpy()
-                
+
                 # Scale the heatmap by its model's weight before adding to the list
                 scaled_heatmaps.append(heat * weight)
+                weights.append(weight)
 
         # If only one model, return its (scaled) heatmap.
         if len(scaled_heatmaps) == 1:
             # Clip to ensure the output is always a valid probability [0, 1]
             return np.clip(scaled_heatmaps[0], 0.0, 1.0)
         
-        # --- MODIFIED COMBINATION LOGIC ---
-        # If multiple heatmaps, stack the SCALED heatmaps and take the element-wise maximum.
-        blended = np.maximum.reduce(scaled_heatmaps)
-        
+        total_w = float(sum(weights))
+
+        # Blend by weighted average of the scaled heatmaps
+        summed = np.sum(scaled_heatmaps, axis=0)
+        blended = summed / total_w if total_w > 0 else summed
+
         # Clip the final result to ensure it remains a valid probability map.
-        blended = np.clip(blended, 0.0, 1.0)
-        # --- END OF MODIFICATION ---
-        
-        return blended
+        return np.clip(blended, 0.0, 1.0)
